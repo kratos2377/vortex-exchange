@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 
 
-#[derive(Accounts)]
+#[account]
 pub struct SystemExchangeAccount {
     pub bump_original: u8,          
     pub total_stock_companies: u32, 
@@ -10,14 +10,13 @@ pub struct SystemExchangeAccount {
     pub total_offers: u64,
 }
 
-#[derive(Accounts)]
+#[account]
 pub struct StockAccount {
     pub bump_original: u8,
-    pub pubkey_original: PubKey,
+    pub pubkey_original: Pubkey,
     pub name: String,
     pub total_supply: u64,
     pub supply_in_position: u64,
-    pub holders: u64,
     pub holders: u64,
     pub dividends: bool,
     pub dividend_payment_period: i64,
@@ -26,19 +25,19 @@ pub struct StockAccount {
     pub current_offers: u32,
 }
 
-#[derive(Accounts)]
+#[account]
 pub struct HolderAccount {
     pub bump_original: u8,     
     pub participation: u64,    
     pub holder_pubkey: Pubkey, 
 }
 
-#[derive(Accounts)]
+#[account]
 pub struct SellOrBuyAccount {
     pub bump_original: u8,
-    pub sell_or_buy_account: Vec<u64>,
+    pub sell_or_buy_amount: Vec<u64>,
     pub price: Vec<u64>,
-    pub pubkey: PubKey,
+    pub pubkey: Pubkey,
     pub len: u64,
 }
 

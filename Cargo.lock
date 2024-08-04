@@ -1157,6 +1157,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "pyth"
+version = "0.1.0"
+dependencies = [
+ "anchor-lang",
+ "arrayref",
+ "bytemuck",
+]
+
+[[package]]
 name = "quote"
 version = "1.0.35"
 source = "registry+https://github.com/rust-lang/crates.io-index"
