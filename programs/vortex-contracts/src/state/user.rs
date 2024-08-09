@@ -12,6 +12,7 @@ use super::{position::PositionDirection, spot_market::SpotBalanceType};
 pub struct User {
     pub authority: Pubkey,
     pub name: [u8; 32],
+    pub game_stake_positions: [GameStakePosition; 4],
     pub spot_positions: [SpotPosition; 8],
     pub perp_positions: [PerpPosition; 8],
     pub orders: [Order; 32],
@@ -30,7 +31,7 @@ pub struct User {
 }
 
 #[zero_copy(unsafe)]
-#[derive(Default, Eq, PartialEq, Debug)]
+#[derive(Default, Eq, PartialEq, Debug, BorshDeserialize , BorshSerialize)]
 #[repr(C)]
 pub struct SpotPosition {
     pub scaled_balance: u64,
@@ -44,7 +45,18 @@ pub struct SpotPosition {
 }
 
 #[zero_copy(unsafe)]
-#[derive(Default, Debug, Eq, PartialEq)]
+#[derive(Default, Eq, PartialEq, Debug , BorshDeserialize , BorshSerialize)]
+#[repr(C)]
+pub struct GameStakePosition {
+    // will be uuid
+    pub game_id: u64,
+    pub total_stake_by_user: f64,
+    //will be uuid
+    pub player_staked_id: u64
+}
+
+#[zero_copy(unsafe)]
+#[derive(Default, Debug, Eq, PartialEq, BorshDeserialize , BorshSerialize)]
 #[repr(C)]
 pub struct PerpPosition {
     pub last_cumulative_funding_rate: i64,
