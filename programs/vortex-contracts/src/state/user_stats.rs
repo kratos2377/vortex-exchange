@@ -1,8 +1,9 @@
-use anchor_lang::prelude::Pubkey;
+use anchor_lang::prelude::*;
 
 
 
-#[account]
+#[account(zero_copy(unsafe))]
+#[derive(Eq, PartialEq, Debug)]
 #[repr(C)]
 pub struct UserStats {
     pub authority: Pubkey,

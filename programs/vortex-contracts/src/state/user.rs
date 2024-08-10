@@ -1,13 +1,12 @@
 use std::fmt;
-
-use anchor_lang::{account, prelude::Pubkey, zero_copy, AnchorDeserialize, AnchorSerialize};
+use anchor_lang::prelude::*;
 use borsh::{BorshDeserialize, BorshSerialize};
 
 use super::{position::PositionDirection, spot_market::SpotBalanceType};
 
 
 
-#[account]
+#[account(zero_copy(unsafe))]
 #[repr(C)]
 pub struct User {
     pub authority: Pubkey,
@@ -26,8 +25,11 @@ pub struct User {
     pub last_active_slot: u64,
     pub next_order_id: u32,
     pub max_margin_ratio: u32,
-    pub next_liquidation_id: u16,
-    pub sub_account_id: u16,
+    pub next_liquidation_id: u16
+}
+
+impl User {
+    pub const SIZE: usize = 4376;
 }
 
 #[zero_copy(unsafe)]
@@ -49,10 +51,10 @@ pub struct SpotPosition {
 #[repr(C)]
 pub struct GameStakePosition {
     // will be uuid
-    pub game_id: u64,
-    pub total_stake_by_user: f64,
+    pub game_id: [u8; 16],
+    pub total_stake_by_user: u64,
     //will be uuid
-    pub player_staked_id: u64
+    pub player_staked_id: [u8; 16]
 }
 
 #[zero_copy(unsafe)]
