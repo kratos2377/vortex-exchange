@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use enumflags2::BitFlags;
 
-use crate::{errors::VortexDexResult, safe_methods::SafeMath};
+use crate::{errors::VortexDexResult, safe_methods::SafeMath , safe_methods::SafeUnwrap};
 
 use super::constants::{FEE_DENOMINATOR, FEE_PERCENTAGE_DENOMINATOR, LAMPORTS_PER_SOL_U64, MAX_REFERRER_REWARD_EPOCH_UPPER_BOUND, PERCENTAGE_PRECISION_U64};
 
@@ -17,6 +17,12 @@ pub enum ExchangeStatus {
     FundingPaused = 0b00100000,
     SettlePnlPaused = 0b01000000,
     // Paused = 0b11111111
+}
+
+impl ExchangeStatus {
+    pub fn active() -> u8 {
+        BitFlags::<ExchangeStatus>::empty().bits() as u8
+    }
 }
 
 #[account]
@@ -223,4 +229,12 @@ pub struct OrderFillerRewardStructure {
     pub reward_numerator: u32,
     pub reward_denominator: u32,
     pub time_based_reward_lower_bound: u128, // minimum filler reward for time-based reward
+}
+
+#[derive(Copy, AnchorSerialize, AnchorDeserialize, Clone, Default, Debug)]
+pub struct ValidityGuardRails {
+    pub slots_before_stale_for_amm: i64,
+    pub slots_before_stale_for_margin: i64,
+    pub confidence_interval_max_size: u64,
+    pub too_volatile_ratio: i64,
 }

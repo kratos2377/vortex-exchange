@@ -1,17 +1,18 @@
 use anchor_lang::prelude::*;
+use anchor_spl::token_2022::spl_token_2022::extension::confidential_transfer::instruction;
+use solana_program::{program::invoke, system_instruction::transfer};
 
-use crate::{errors::DexError, load, load_mut, state::{dex_state::DexState, user::User, user_stats::UserStats}, utils::token_utils, validate};
+use crate::{casting::Cast, errors::DexError, load, load_mut, safe_increment, state::{dex_state::DexState, events::NewUserAccountRecord, user::User, user_stats::UserStats}, utils::token_utils, validate};
 
 
 
 
-pub fn handle_initialize_user<'c: 'info, 'info>(
+pub fn initialize_new_user_account<'c: 'info, 'info>(
     ctx: Context<'_, '_, 'c, 'info, InitializeUserAccount<'info>>,
-    sub_account_id: u16,
     name: [u8; 32],
 ) -> Result<()> {
     let user_key = ctx.accounts.user.key();
-    let mut user = ctx
+    let mut user   = ctx
         .accounts
         .user
         .load_init()
@@ -34,19 +35,15 @@ pub fn handle_initialize_user<'c: 'info, 'info>(
         )?;
     }
 
-
-
-
     let state = &mut ctx.accounts.state;
 
     let now_ts = Clock::get()?.unix_timestamp;
 
 
-    emit!(NewUserRecord {
+    emit!(NewUserAccountRecord {
         ts: now_ts,
         user_authority: ctx.accounts.authority.key(),
         user: user_key,
-        sub_account_id,
         name
     });
 
@@ -79,6 +76,34 @@ pub fn handle_initialize_user<'c: 'info, 'info>(
 }
 
 
+pub fn handle_initialize_user_stats<'c: 'info, 'info>(
+    ctx: Context<'_, '_, 'c, 'info, InitializeUserStats<'info>>
+) -> Result<()> {
+    let clock = Clock::get()?;
+
+    let mut user_stats = ctx
+        .accounts
+        .user_stats
+        .load_init()
+        .or(Err(DexError::UnableToLoadAccountLoader))?;
+
+    *user_stats = UserStats {
+        authority: ctx.accounts.authority.key(),
+        number_of_sub_accounts: 0,
+        last_taker_volume_30d_ts: clock.unix_timestamp,
+        last_maker_volume_30d_ts: clock.unix_timestamp,
+        last_filler_volume_30d_ts: clock.unix_timestamp,
+        last_fuel_if_bonus_update_ts: clock.unix_timestamp.cast()?,
+        ..UserStats::default()
+    };
+
+    let state = &mut ctx.accounts.state;
+    safe_increment!(state.number_of_authorities, 1);
+
+
+    Ok(())
+}
+
 
 #[derive(Accounts)]
 pub struct InitializeUserAccount<'info>{
@@ -102,4 +127,34 @@ pub struct InitializeUserAccount<'info>{
     pub payer: Signer<'info>,
     pub rent: Sysvar<'info, Rent>,
     pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct InitializeUserStats<'info>{
+    #[account(
+        init,
+        seeds = [b"user_stats", authority.key.as_ref()],
+        space = UserStats::SIZE,
+        bump,
+        payer = payer
+    )]
+    pub user_stats: AccountLoader<'info, UserStats>,
+    #[account(mut)]
+    pub state: Box<Account<'info, DexState>>,
+    pub authority: Signer<'info>,
+    #[account(mut)]
+    pub payer: Signer<'info>,
+    pub rent: Sysvar<'info, Rent>,
+    pub system_program: Program<'info, System>,
+}
+
+
+#[derive(Accounts)]
+#[instruction(market_index: u16)]
+pub struct Deposit<'info> {
+    pub state: Box<Account<'info,DexState>>,
+    #[account(
+        mut,
+        constrain = can_sign_for_user(&user, &authority)
+    )]
 }

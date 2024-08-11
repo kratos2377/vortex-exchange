@@ -7,13 +7,15 @@ edition = "2021"
 [lib]
 crate-type = ["cdylib", "lib"]
 name = "vortex_contracts"
+path="src/lib.rs"
 
 [features]
 no-entrypoint = []
 no-idl = []
 no-log-ix-name = []
 cpi = ["no-entrypoint"]
-default = []
+default = ["devnet"]
+devnet=[]
 
 [dependencies]
 anchor-lang = "0.29.0"
