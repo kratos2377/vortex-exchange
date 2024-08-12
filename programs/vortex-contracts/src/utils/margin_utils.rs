@@ -1,8 +1,11 @@
 use std::cmp::{max, min, Ordering};
 
-use crate::{errors::{DexError, VortexDexResult}, utils::{oracle_utils::{is_oracle_valid_for_action, VortexDexAction}, spot_market_utils::get_token_value}, validate};
+use solana_program::msg;
 
-use super::{constants::{MARGIN_PRECISION_U128, PRICE_PRECISION, PRICE_PRECISION_I128, SPOT_IMF_PRECISION_U128, SPOT_WEIGHT_PRECISION_U128}, margin_calculation::{MarginCalculation, MarginContext, MarketIdentifier}, oracle::StrictOraclePrice, oracle_map::OracleMap, spot_market::{AssetTier, ContractTier, MarketStatus}, spot_market_map::SpotMarketMap, user::{MarketType, User}};
+use crate::{errors::{DexError, VortexDexResult}, state::{margin_calculation::{MarginCalculation, MarginContext, MarketIdentifier}, oracle::StrictOraclePrice, oracle_map::OracleMap, spot_market::{AssetTier, ContractTier, SpotBalanceType}, spot_market_map::SpotMarketMap, user::{MarketType, OrderFillSimulation, User}}, utils::{oracle_utils::{is_oracle_valid_for_action, VortexDexAction}, spot_market_utils::{get_strict_token_value, get_token_value}, validation_utils}, validate};
+
+use super::constants::{MARGIN_PRECISION_U128, PRICE_PRECISION, SPOT_IMF_PRECISION_U128, SPOT_WEIGHT_PRECISION_U128};
+
 
 
 
@@ -85,13 +88,13 @@ pub fn calculate_user_safest_position_tiers(
         safest_tier_spot_liablity = min(safest_tier_spot_liablity, spot_market.asset_tier);
     }
 
-    for market_position in user.perp_positions.iter() {
-        if market_position.is_available() {
-            continue;
-        }
-        let market = &perp_market_map.get_ref(&market_position.market_index)?;
-        safest_tier_perp_liablity = min(safest_tier_perp_liablity, market.contract_tier);
-    }
+    // for market_position in user.perp_positions.iter() {
+    //     if market_position.is_available() {
+    //         continue;
+    //     }
+      
+    //     safest_tier_perp_liablity = min(safest_tier_perp_liablity, market.contract_tier);
+    // }
 
     Ok((safest_tier_spot_liablity, safest_tier_perp_liablity))
 }
@@ -111,7 +114,7 @@ pub fn calculate_margin_requirement_and_total_collateral_and_liability_info(
     };
 
     for spot_position in user.spot_positions.iter() {
-        validation::position::validate_spot_position(spot_position)?;
+        validation_utils::validate_spot_position(spot_position)?;
 
         if spot_position.is_available() {
             continue;
@@ -301,106 +304,7 @@ pub fn calculate_margin_requirement_and_total_collateral_and_liability_info(
         }
     }
 
-    for market_position in user.perp_positions.iter() {
-        if market_position.is_available() {
-            continue;
-        }
-
-        let market = &perp_market_map.get_ref(&market_position.market_index)?;
-
-        let quote_spot_market = spot_market_map.get_ref(&market.quote_spot_market_index)?;
-        let (quote_oracle_price_data, quote_oracle_validity) = oracle_map
-            .get_price_data_and_validity(
-                MarketType::Spot,
-                quote_spot_market.market_index,
-                &quote_spot_market.oracle,
-                quote_spot_market
-                    .historical_oracle_data
-                    .last_oracle_price_twap,
-                quote_spot_market.get_max_confidence_interval_multiplier()?,
-            )?;
-
-        calculation.update_all_oracles_valid(is_oracle_valid_for_action(
-            quote_oracle_validity,
-            Some(VortexDexAction::MarginCalc),
-        )?);
-
-        let strict_quote_price = StrictOraclePrice::new(
-            quote_oracle_price_data.price,
-            quote_spot_market
-                .historical_oracle_data
-                .last_oracle_price_twap_5min,
-            calculation.context.strict,
-        );
-        drop(quote_spot_market);
-
-        let (oracle_price_data, oracle_validity) = oracle_map.get_price_data_and_validity(
-            MarketType::Perp,
-            market.market_index,
-            &market.amm.oracle,
-            market.amm.historical_oracle_data.last_oracle_price_twap,
-            market.get_max_confidence_interval_multiplier()?,
-        )?;
-
-        let (
-            perp_margin_requirement,
-            weighted_pnl,
-            worst_case_base_asset_value,
-            open_order_margin_requirement,
-            base_asset_value,
-        ) = calculate_perp_position_value_and_pnl(
-            market_position,
-            market,
-            oracle_price_data,
-            &strict_quote_price,
-            context.margin_type,
-            user_custom_margin_ratio,
-            calculation.track_open_orders_fraction(),
-        )?;
-
-        calculation.update_fuel_perp_bonus(
-            market,
-            &market_position,
-            base_asset_value,
-            oracle_price_data.price,
-        )?;
-
-        calculation.add_margin_requirement(
-            perp_margin_requirement,
-            worst_case_base_asset_value,
-            MarketIdentifier::perp(market.market_index),
-        )?;
-
-        if calculation.track_open_orders_fraction() {
-            calculation.add_open_orders_margin_requirement(open_order_margin_requirement)?;
-        }
-
-        calculation.add_total_collateral(weighted_pnl)?;
-
-        #[cfg(feature = "drift-rs")]
-        calculation.add_perp_liability_value(worst_case_base_asset_value)?;
-        #[cfg(feature = "drift-rs")]
-        calculation.add_perp_pnl(weighted_pnl)?;
-
-        let has_perp_liability = market_position.base_asset_amount != 0
-            || market_position.quote_asset_amount < 0
-            || market_position.has_open_order()
-            || market_position.is_lp();
-
-        if has_perp_liability {
-            calculation.add_perp_liability()?;
-            calculation.update_with_perp_isolated_liability(
-                market.contract_tier == ContractTier::Isolated,
-            );
-        }
-
-        if has_perp_liability || calculation.context.margin_type != MarginRequirementType::Initial {
-            calculation.update_all_oracles_valid(is_oracle_valid_for_action(
-                oracle_validity,
-                Some(VortexDexAction::MarginCalc),
-            )?);
-        }
-    }
+    // Add perp markets support later
 
     calculation.validate_num_spot_liabilities()?;
 
@@ -708,74 +612,7 @@ pub fn calculate_user_equity(
         net_usd_value = net_usd_value.safe_add(token_value)?;
     }
 
-    for market_position in user.perp_positions.iter() {
-        if market_position.is_available() {
-            continue;
-        }
-
-     //   let market = &perp_market_map.get_ref(&market_position.market_index)?;
-
-        let quote_oracle_price = {
-            let quote_spot_market = spot_market_map.get_ref(&market.quote_spot_market_index)?;
-            let (quote_oracle_price_data, quote_oracle_validity) = oracle_map
-                .get_price_data_and_validity(
-                    MarketType::Spot,
-                    quote_spot_market.market_index,
-                    &quote_spot_market.oracle,
-                    quote_spot_market
-                        .historical_oracle_data
-                        .last_oracle_price_twap,
-                    quote_spot_market.get_max_confidence_interval_multiplier()?,
-                )?;
-
-            all_oracles_valid &=
-                is_oracle_valid_for_action(quote_oracle_validity, Some(VortexDexAction::MarginCalc))?;
-
-            quote_oracle_price_data.price
-        };
-
-        let (oracle_price_data, oracle_validity) = oracle_map.get_price_data_and_validity(
-            MarketType::Perp,
-            market.market_index,
-            &market.amm.oracle,
-            market.amm.historical_oracle_data.last_oracle_price_twap,
-            market.get_max_confidence_interval_multiplier()?,
-        )?;
-
-        all_oracles_valid &=
-            is_oracle_valid_for_action(oracle_validity, Some(VortexDexAction::MarginCalc))?;
-
-        let valuation_price = if market.status == MarketStatus::Settlement {
-            market.expiry_price
-        } else {
-            oracle_price_data.price
-        };
-
-        let unrealized_funding = calculate_funding_payment(
-            if market_position.base_asset_amount > 0 {
-                market.amm.cumulative_funding_rate_long
-            } else {
-                market.amm.cumulative_funding_rate_short
-            },
-            market_position,
-        )?;
-
-        let market_position =
-            market_position.simulate_settled_lp_position(market, valuation_price)?;
-
-        let (_, unrealized_pnl) = calculate_base_asset_value_and_pnl_with_oracle_price(
-            &market_position,
-            valuation_price,
-        )?;
-
-        let pnl = unrealized_pnl.safe_add(unrealized_funding.cast()?)?;
-
-        let pnl_value = pnl
-            .safe_mul(quote_oracle_price.cast()?)?
-            .safe_div(PRICE_PRECISION_I128)?;
-
-        net_usd_value = net_usd_value.safe_add(pnl_value)?;
-    }
+    //Add support for pep positions later
 
     Ok((net_usd_value, all_oracles_valid))
 }

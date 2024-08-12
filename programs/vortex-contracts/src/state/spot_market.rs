@@ -5,9 +5,9 @@ use borsh::{BorshDeserialize, BorshSerialize};
 
 use crate::{errors::VortexDexResult, utils::{spot_market_utils::{calculate_utilization, get_token_amount, get_token_value}, stats_utils::calculate_new_twap}, validate};
 
-use super::{constants::{AMM_RESERVE_PRECISION, FIVE_MINUTE, MARGIN_PRECISION, ONE_HOUR, PERCENTAGE_PRECISION, PRICE_PRECISION_I64, SPOT_CUMULATIVE_INTEREST_PRECISION, SPOT_WEIGHT_PRECISION_U128}, margin::{calculate_size_discount_asset_weight, calculate_size_premium_liability_weight, MarginRequirementType}, operations::SpotOperation, oracle::{HistoricalIndexData, HistoricalOracleData, OracleSource}};
-
-
+use super::{operations::SpotOperation, oracle::{HistoricalIndexData, HistoricalOracleData, OracleSource}};
+use crate::utils::constants::{AMM_RESERVE_PRECISION, FIVE_MINUTE, MARGIN_PRECISION, ONE_HOUR, PERCENTAGE_PRECISION, PRICE_PRECISION_I64, SPOT_CUMULATIVE_INTEREST_PRECISION, SPOT_WEIGHT_PRECISION_U128};
+use crate::utils::margin_utils::{calculate_size_discount_asset_weight, calculate_size_premium_liability_weight, MarginRequirementType};
 #[account(zero_copy(unsafe))]
 #[derive(PartialEq, Eq, Debug)]
 #[repr(C)]

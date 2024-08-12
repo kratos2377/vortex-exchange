@@ -1,15 +1,14 @@
-use std::{cell::{Ref, RefMut}, collections::BTreeMap, iter::Peekable, panic::Location, slice::Iter};
+use std::{cell::{Ref, RefMut}, collections::{BTreeMap, BTreeSet}, iter::Peekable, panic::Location, slice::Iter};
 
 use anchor_lang::prelude::{AccountInfo, AccountLoader};
 use arrayref::array_ref;
 use solana_program::msg;
 
-use crate::{errors::{DexError, VortexDexResult}, state::constants::QUOTE_SPOT_MARKET_INDEX};
+use crate::{errors::{DexError, VortexDexResult}, utils::constants::QUOTE_SPOT_MARKET_INDEX};
 
 use super::spot_market::SpotMarket;
 
-
-
+pub(crate) type MarketSet = BTreeSet<u16>;
 
 pub struct SpotMarketMap<'a>(pub BTreeMap<u16, AccountLoader<'a, SpotMarket>>);
 
@@ -190,4 +189,20 @@ impl<'a> SpotMarketMap<'a> {
 
         Ok(spot_market_map)
     }
+}
+
+pub(crate) type SpotMarketSet = BTreeSet<u16>;
+
+pub fn get_writable_spot_market_set(market_index: u16) -> SpotMarketSet {
+    let mut writable_markets = SpotMarketSet::new();
+    writable_markets.insert(market_index);
+    writable_markets
+}
+
+pub fn get_writable_spot_market_set_from_many(market_indexes: Vec<u16>) -> SpotMarketSet {
+    let mut writable_markets = SpotMarketSet::new();
+    for market_index in market_indexes {
+        writable_markets.insert(market_index);
+    }
+    writable_markets
 }

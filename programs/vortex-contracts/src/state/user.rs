@@ -1,9 +1,12 @@
 use std::fmt;
 use anchor_lang::prelude::*;
+use anchor_spl::token_interface::{TokenAccount, TokenInterface};
 use borsh::{BorshDeserialize, BorshSerialize};
 
-use super::{position::PositionDirection, spot_market::SpotBalanceType};
+use crate::errors::VortexDexResult;
 
+use super::{dex_state::DexState, position::PositionDirection, spot_market::{SpotBalanceType, SpotMarket}, user_stats::UserStats};
+use crate::utils::{constants::{SPOT_WEIGHT_PRECISION, SPOT_WEIGHT_PRECISION_I128}, margin_utils::MarginRequirementType};
 
 
 #[account(zero_copy(unsafe))]
@@ -143,7 +146,6 @@ pub struct Order {
 }
 
 
-
 #[derive(Clone, Copy, BorshSerialize, BorshDeserialize, PartialEq, Eq, Debug)]
 pub enum OrderStatus {
     /// The order is not in use
@@ -189,5 +191,72 @@ impl fmt::Display for MarketType {
             MarketType::Spot => write!(f, "Spot"),
             MarketType::Perp => write!(f, "Perp"),
         }
+    }
+}
+
+
+#[derive(Clone, Copy, Default, Eq, PartialEq, Debug)]
+pub struct OrderFillSimulation {
+    pub token_amount: i128,
+    pub orders_value: i128,
+    pub token_value: i128,
+    pub weighted_token_value: i128,
+    pub free_collateral_contribution: i128,
+}
+
+impl OrderFillSimulation {
+    pub fn riskier_side(ask: Self, bid: Self) -> Self {
+        if ask.free_collateral_contribution <= bid.free_collateral_contribution {
+            ask
+        } else {
+            bid
+        }
+    }
+
+    pub fn risk_increasing(&self, after: Self) -> bool {
+        after.free_collateral_contribution < self.free_collateral_contribution
+    }
+
+    pub fn apply_user_custom_margin_ratio(
+        mut self,
+        spot_market: &SpotMarket,
+        oracle_price: i64,
+        user_custom_margin_ratio: u32,
+    ) -> VortexDexResult<Self> {
+        if user_custom_margin_ratio == 0 {
+            return Ok(self);
+        }
+
+        if self.weighted_token_value < 0 {
+            let max_liability_weight = spot_market
+                .get_liability_weight(
+                    self.token_amount.unsigned_abs(),
+                    &MarginRequirementType::Initial,
+                )?
+                .max(user_custom_margin_ratio.safe_add(SPOT_WEIGHT_PRECISION)?);
+
+            self.weighted_token_value = self
+                .token_value
+                .safe_mul(max_liability_weight.cast()?)?
+                .safe_div(SPOT_WEIGHT_PRECISION_I128)?;
+        } else if self.weighted_token_value > 0 {
+            let min_asset_weight = spot_market
+                .get_asset_weight(
+                    self.token_amount.unsigned_abs(),
+                    oracle_price,
+                    &MarginRequirementType::Initial,
+                )?
+                .min(SPOT_WEIGHT_PRECISION.saturating_sub(user_custom_margin_ratio));
+
+            self.weighted_token_value = self
+                .token_value
+                .safe_mul(min_asset_weight.cast()?)?
+                .safe_div(SPOT_WEIGHT_PRECISION_I128)?;
+        }
+
+        self.free_collateral_contribution =
+            self.weighted_token_value.safe_add(self.orders_value)?;
+
+        Ok(self)
     }
 }

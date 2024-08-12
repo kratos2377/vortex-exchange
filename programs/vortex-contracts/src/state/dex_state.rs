@@ -3,7 +3,7 @@ use enumflags2::BitFlags;
 
 use crate::{errors::VortexDexResult, safe_methods::SafeMath , safe_methods::SafeUnwrap};
 
-use super::constants::{FEE_DENOMINATOR, FEE_PERCENTAGE_DENOMINATOR, LAMPORTS_PER_SOL_U64, MAX_REFERRER_REWARD_EPOCH_UPPER_BOUND, PERCENTAGE_PRECISION_U64};
+use crate::utils::constants::{FEE_DENOMINATOR, FEE_PERCENTAGE_DENOMINATOR, LAMPORTS_PER_SOL_U64, MAX_REFERRER_REWARD_EPOCH_UPPER_BOUND, PERCENTAGE_PRECISION_U64};
 
 
 #[derive(BitFlags, Clone, Copy, PartialEq, Debug, Eq)]
@@ -238,3 +238,47 @@ pub struct ValidityGuardRails {
     pub confidence_interval_max_size: u64,
     pub too_volatile_ratio: i64,
 }
+
+#[derive(Copy, AnchorSerialize, AnchorDeserialize, Clone, Debug)]
+pub struct OracleGuardRails {
+    pub price_divergence: PriceDivergenceGuardRails,
+    pub validity: ValidityGuardRails,
+}
+
+impl Default for OracleGuardRails {
+    fn default() -> Self {
+        OracleGuardRails {
+            price_divergence: PriceDivergenceGuardRails::default(),
+            validity: ValidityGuardRails {
+                slots_before_stale_for_amm: 10,       // ~5 seconds
+                slots_before_stale_for_margin: 120,   // ~60 seconds
+                confidence_interval_max_size: 20_000, // 2% of price
+                too_volatile_ratio: 5,                // 5x or 80% down
+            },
+        }
+    }
+}
+
+impl OracleGuardRails {
+    pub fn max_oracle_twap_5min_percent_divergence(&self) -> u64 {
+        self.price_divergence
+            .oracle_twap_5min_percent_divergence
+            .max(PERCENTAGE_PRECISION_U64 / 2)
+    }
+}
+
+#[derive(Copy, AnchorSerialize, AnchorDeserialize, Clone, Debug)]
+pub struct PriceDivergenceGuardRails {
+    pub mark_oracle_percent_divergence: u64,
+    pub oracle_twap_5min_percent_divergence: u64,
+}
+
+impl Default for PriceDivergenceGuardRails {
+    fn default() -> Self {
+        PriceDivergenceGuardRails {
+            mark_oracle_percent_divergence: PERCENTAGE_PRECISION_U64 / 10,
+            oracle_twap_5min_percent_divergence: PERCENTAGE_PRECISION_U64 / 2,
+        }
+    }
+}
+

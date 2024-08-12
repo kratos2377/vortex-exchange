@@ -25,3 +25,8 @@ where
     let mut uniq = BTreeSet::new();
     iter.into_iter().all(move |x| uniq.insert(x))
 }
+
+
+pub fn get_signer_seeds(nonce: &u8) -> [&[u8]; 2] {
+    [b"drift_signer".as_ref(), bytemuck::bytes_of(nonce)]
+}

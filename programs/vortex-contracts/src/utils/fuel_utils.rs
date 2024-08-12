@@ -1,4 +1,4 @@
-use crate::{errors::VortexDexResult, state::{constants::{FUEL_WINDOW_U128, QUOTE_PRECISION, QUOTE_PRECISION_U64}, spot_market::SpotMarket}};
+use crate::{errors::VortexDexResult, state::spot_market::SpotMarket, utils::constants::{FUEL_WINDOW_U128, QUOTE_PRECISION, QUOTE_PRECISION_U64}};
 
 pub fn calculate_spot_fuel_bonus(
     spot_market: &SpotMarket,

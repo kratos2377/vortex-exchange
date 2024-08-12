@@ -1,11 +1,12 @@
 use std::{collections::BTreeMap, iter::Peekable, slice::Iter};
 
 use anchor_lang::prelude::*;
+use arrayref::array_ref;
 
-use crate::{errors::VortexDexResult, ids::drift_oracle_receiver_program, utils::oracle_utils::{oracle_validity, OracleValidity}, validate};
+use crate::{errors::{DexError, VortexDexResult}, ids::{bonk_oracle, bonk_pull_oracle, drift_oracle_receiver_program, pepe_oracle, pepe_pull_oracle, pyth_program, usdc_oracle, usdc_pull_oracle, usdt_oracle, usdt_pull_oracle, wen_oracle, wen_pull_oracle}, utils::oracle_utils::{oracle_validity, OracleValidity}, validate};
 
-use super::{dex_state::ValidityGuardRails, oracle::{get_oracle_price, OraclePriceData, OracleSource, PrelaunchOracle}, user::MarketType};
-
+use super::{dex_state::{OracleGuardRails, ValidityGuardRails}, oracle::{get_oracle_price, OraclePriceData, OracleSource, PrelaunchOracle}, user::MarketType};
+use crate::utils::constants::PRICE_PRECISION_I64;
 pub const PYTH_1M_IDS: [Pubkey; 2] = [bonk_oracle::id(), pepe_oracle::id()];
 pub const PYTH_PULL_1M_IDS: [Pubkey; 2] = [bonk_pull_oracle::id(), pepe_pull_oracle::id()];
 
@@ -39,7 +40,7 @@ impl<'a> OracleMap<'a> {
         Ok(self
             .oracles
             .get(pubkey)
-            .ok_or(ErrorCode::OracleNotFound)?
+            .ok_or(DexError::OracleNotFound)?
             .account_info
             .clone())
     }
@@ -64,7 +65,7 @@ impl<'a> OracleMap<'a> {
             }) => (account_info, oracle_source),
             None => {
                 msg!("oracle pubkey not found in oracle_map: {}", pubkey);
-                return Err(ErrorCode::OracleNotFound);
+                return Err(DexError::OracleNotFound);
             }
         };
 
@@ -115,7 +116,7 @@ impl<'a> OracleMap<'a> {
             }) => (account_info, oracle_source),
             None => {
                 msg!("oracle pubkey not found in oracle_map: {}", pubkey);
-                return Err(ErrorCode::OracleNotFound);
+                return Err(DexError::OracleNotFound);
             }
         };
 
@@ -161,7 +162,7 @@ impl<'a> OracleMap<'a> {
             }) => (account_info, oracle_source),
             None => {
                 msg!("oracle pubkey not found in oracle_map: {}", pubkey);
-                return Err(ErrorCode::OracleNotFound);
+                return Err(DexError::OracleNotFound);
             }
         };
 
@@ -333,19 +334,19 @@ impl<'a> OracleMap<'a> {
         } else if account_info.owner == &crate::id() {
             let data = account_info.try_borrow_data().map_err(|e| {
                 msg!("Failed to borrow data while loading oracle map {:?}", e);
-                UnableToLoadOracle
+                DexError::UnableToLoadOracle
             })?;
 
             let expected_data_len = PrelaunchOracle::SIZE;
             if data.len() < expected_data_len {
                 msg!("Unexpected account data len loading oracle");
-                return Err(UnableToLoadOracle);
+                return Err(DexError::UnableToLoadOracle);
             }
 
             let account_discriminator = array_ref![data, 0, 8];
             if account_discriminator != &PrelaunchOracle::discriminator() {
                 msg!("Unexpected account discriminator");
-                return Err(UnableToLoadOracle);
+                return Err(DexError::UnableToLoadOracle);
             }
 
             let pubkey = account_info.key();
@@ -356,26 +357,8 @@ impl<'a> OracleMap<'a> {
                     oracle_source: OracleSource::Prelaunch,
                 },
             );
-        } else if account_info.owner == &switchboard_program::id() {
-            let pubkey = account_info.key();
-            oracles.insert(
-                pubkey,
-                AccountInfoAndOracleSource {
-                    account_info: account_info.clone(),
-                    oracle_source: OracleSource::Switchboard,
-                },
-            );
-        } else if account_info.owner == &switchboard_on_demand::id() {
-            let pubkey = account_info.key();
-            oracles.insert(
-                pubkey,
-                AccountInfoAndOracleSource {
-                    account_info: account_info.clone(),
-                    oracle_source: OracleSource::SwitchboardOnDemand,
-                },
-            );
-        } else if account_info.key() != Pubkey::default() {
-            return Err(ErrorCode::InvalidOracle);
+        }  else if account_info.key() != Pubkey::default() {
+            return Err(DexError::InvalidOracle);
         }
 
         let ogr: OracleGuardRails = if let Some(o) = oracle_guard_rails {
@@ -406,7 +389,7 @@ impl<'a> OracleMap<'a> {
 
         validate!(
             OracleMap::load_one(account_info, 0, None)?.oracles.len() == 1,
-            ErrorCode::InvalidOracle,
+            DexError::InvalidOracle,
             "oracle owner not recognizable"
         )
     }

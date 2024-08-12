@@ -12,6 +12,7 @@ pub mod macros;
 pub mod ids;
 pub mod safe_methods;
 pub mod casting;
+pub mod controllers;
 
 
 #[cfg(feature = "devnet")]
