@@ -22,6 +22,8 @@ declare_id!("HkApQpEsdzdfHsedkuZvNEbmcQXfabobbb9Yf8wdz7AZ");
 pub mod vortex_contracts {
   
 
+    use state::{order_params::{ModifyOrderParams, OrderParams}, position::PositionDirection, user::MarketType};
+
     use super::*;
 
     

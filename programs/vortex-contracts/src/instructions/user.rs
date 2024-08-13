@@ -2,8 +2,8 @@ use anchor_lang::prelude::*;
 use anchor_spl::{token::TokenAccount, token_2022::spl_token_2022::extension::confidential_transfer::instruction, token_interface::TokenInterface};
 use solana_program::{program::invoke, system_instruction::transfer};
 
-use crate::{casting::Cast, controllers::{self, spot_position::charge_withdraw_fee}, errors::DexError, get_then_update_id, instructions::{account::{get_token_mint, load_maps, AccountMaps}, constraints::{can_sign_for_user, is_stats_for_user}}, load, load_mut, safe_increment, state::{dex_state::DexState, events::{DepositDirection, DepositExplanation, DepositRecord, NewUserAccountRecord}, spot_market::{MarketStatus, SpotBalanceType}, spot_market_map::get_writable_spot_market_set, user::User, user_stats::UserStats}, utils::{liquidation_utils::is_user_being_liquidated, margin_utils::{calculate_max_withdrawable_amount, validate_spot_margin_trading, MarginRequirementType}, spot_market_utils, token_utils}, validate};
-use crate::instructions::constraints::{withdraw_not_paused, deposit_not_paused};
+use crate::{casting::Cast, controllers::{self, orders::ModifyOrderId, spot_position::charge_withdraw_fee}, errors::DexError, get_then_update_id, instructions::{account::{get_token_mint, load_maps, AccountMaps}, constraints::{can_sign_for_user, is_stats_for_user}}, load, load_mut, safe_increment, state::{dex_state::DexState, events::{DepositDirection, DepositExplanation, DepositRecord, NewUserAccountRecord, OrderActionExplanation}, order_params::ModifyOrderParams, position::PositionDirection, spot_market::{MarketStatus, SpotBalanceType}, spot_market_map::{get_writable_spot_market_set, MarketSet}, user::{MarketType, User}, user_stats::UserStats}, utils::{liquidation_utils::is_user_being_liquidated, margin_utils::{calculate_max_withdrawable_amount, validate_spot_margin_trading, MarginRequirementType}, spot_market_utils, token_utils}, validate};
+use crate::instructions::constraints::{exchange_not_paused , withdraw_not_paused, deposit_not_paused};
 
 
 
@@ -646,6 +646,222 @@ pub fn handle_transfer_deposit<'c: 'info, 'info>(
 }
 
 
+#[access_control(
+    exchange_not_paused(&ctx.accounts.state)
+)]
+pub fn handle_cancel_order<'c: 'info, 'info>(
+    ctx: Context<'_, '_, 'c, 'info, CancelOrder>,
+    order_id: Option<u32>,
+) -> Result<()> {
+    let clock = &Clock::get()?;
+    let state = &ctx.accounts.state;
+
+    let AccountMaps {
+        spot_market_map,
+        mut oracle_map,
+    } = load_maps(
+        &mut ctx.remaining_accounts.iter().peekable(),
+        &MarketSet::new(),
+        clock.slot,
+        Some(state.oracle_guard_rails),
+    )?;
+
+    let order_id = match order_id {
+        Some(order_id) => order_id,
+        None => load!(ctx.accounts.user)?.get_last_order_id(),
+    };
+
+    controllers::orders::cancel_order_by_order_id(
+        order_id,
+        &ctx.accounts.user,
+        &spot_market_map,
+        &mut oracle_map,
+        clock,
+    )?;
+
+    Ok(())
+}
+
+
+#[access_control(
+    exchange_not_paused(&ctx.accounts.state)
+)]
+pub fn handle_cancel_order_by_user_id<'c: 'info, 'info>(
+    ctx: Context<'_, '_, 'c, 'info, CancelOrder>,
+    user_order_id: u8,
+) -> Result<()> {
+    let clock = &Clock::get()?;
+    let state = &ctx.accounts.state;
+
+    let AccountMaps {
+        spot_market_map,
+        mut oracle_map,
+    } = load_maps(
+        &mut ctx.remaining_accounts.iter().peekable(),
+        &MarketSet::new(),
+        clock.slot,
+        Some(state.oracle_guard_rails),
+    )?;
+
+    controllers::orders::cancel_order_by_user_order_id(
+        user_order_id,
+        &ctx.accounts.user,
+        &spot_market_map,
+        &mut oracle_map,
+        clock,
+    )?;
+
+    Ok(())
+}
+
+
+#[access_control(
+    exchange_not_paused(&ctx.accounts.state)
+)]
+pub fn handle_cancel_orders_by_ids<'c: 'info, 'info>(
+    ctx: Context<'_, '_, 'c, 'info, CancelOrder>,
+    order_ids: Vec<u32>,
+) -> Result<()> {
+    let clock = &Clock::get()?;
+    let state = &ctx.accounts.state;
+
+    let AccountMaps {
+        spot_market_map,
+        mut oracle_map,
+    } = load_maps(
+        &mut ctx.remaining_accounts.iter().peekable(),
+        &MarketSet::new(),
+        clock.slot,
+        Some(state.oracle_guard_rails),
+    )?;
+
+    for order_id in order_ids {
+        controllers::orders::cancel_order_by_order_id(
+            order_id,
+            &ctx.accounts.user,
+            &spot_market_map,
+            &mut oracle_map,
+            clock,
+        )?;
+    }
+
+    Ok(())
+}
+
+#[access_control(
+    exchange_not_paused(&ctx.accounts.state)
+)]
+pub fn handle_cancel_orders<'c: 'info, 'info>(
+    ctx: Context<'_, '_, 'c, 'info, CancelOrder<'info>>,
+    market_type: Option<MarketType>,
+    market_index: Option<u16>,
+    direction: Option<PositionDirection>,
+) -> Result<()> {
+    let clock = &Clock::get()?;
+    let state = &ctx.accounts.state;
+
+    let AccountMaps {
+        spot_market_map,
+        mut oracle_map,
+    } = load_maps(
+        &mut ctx.remaining_accounts.iter().peekable(),
+        &MarketSet::new(),
+        clock.slot,
+        Some(state.oracle_guard_rails),
+    )?;
+
+    let user_key = ctx.accounts.user.key();
+    let mut user = load_mut!(ctx.accounts.user)?;
+
+    controllers::orders::cancel_orders(
+        &mut user,
+        &user_key,
+        None,
+        &spot_market_map,
+        &mut oracle_map,
+        clock.unix_timestamp,
+        clock.slot,
+        OrderActionExplanation::None,
+        market_type,
+        market_index,
+        direction,
+    )?;
+
+    Ok(())
+}
+
+#[access_control(
+    exchange_not_paused(&ctx.accounts.state)
+)]
+pub fn handle_modify_order<'c: 'info, 'info>(
+    ctx: Context<'_, '_, 'c, 'info, CancelOrder<'info>>,
+    order_id: Option<u32>,
+    modify_order_params: ModifyOrderParams,
+) -> Result<()> {
+    let clock = &Clock::get()?;
+    let state = &ctx.accounts.state;
+
+    let AccountMaps {
+        spot_market_map,
+        mut oracle_map,
+    } = load_maps(
+        &mut ctx.remaining_accounts.iter().peekable(),
+        &MarketSet::new(),
+        clock.slot,
+        Some(state.oracle_guard_rails),
+    )?;
+
+    let order_id = match order_id {
+        Some(order_id) => order_id,
+        None => load!(ctx.accounts.user)?.get_last_order_id(),
+    };
+
+    controllers::orders::modify_order(
+        ModifyOrderId::OrderId(order_id),
+        modify_order_params,
+        &ctx.accounts.user,
+        state,
+        &spot_market_map,
+        &mut oracle_map,
+        clock,
+    )?;
+
+    Ok(())
+}
+
+#[access_control(
+    exchange_not_paused(&ctx.accounts.state)
+)]
+pub fn handle_modify_order_by_user_order_id<'c: 'info, 'info>(
+    ctx: Context<'_, '_, 'c, 'info, CancelOrder<'info>>,
+    user_order_id: u8,
+    modify_order_params: ModifyOrderParams,
+) -> Result<()> {
+    let clock = &Clock::get()?;
+    let state = &ctx.accounts.state;
+
+    let AccountMaps {
+        spot_market_map,
+        mut oracle_map,
+    } = load_maps(
+        &mut ctx.remaining_accounts.iter().peekable(),
+        &MarketSet::new(),
+        clock.slot,
+        Some(state.oracle_guard_rails),
+    )?;
+
+    controllers::orders::modify_order(
+        ModifyOrderId::UserOrderId(user_order_id),
+        modify_order_params,
+        &ctx.accounts.user,
+        state,
+        &spot_market_map,
+        &mut oracle_map,
+        clock,
+    )?;
+
+    Ok(())
+}
 
 
 #[derive(Accounts)]
@@ -781,4 +997,15 @@ pub struct TransferDeposit<'info> {
         bump,
     )]
     pub spot_market_vault: Box<InterfaceAccount<'info, TokenAccount>>,
+}
+
+#[derive(Accounts)]
+pub struct CancelOrder<'info> {
+    pub state: Box<Account<'info, DexState>>,
+    #[account(
+        mut,
+        constraint = can_sign_for_user(&user, &authority)?
+    )]
+    pub user: AccountLoader<'info, User>,
+    pub authority: Signer<'info>,
 }
