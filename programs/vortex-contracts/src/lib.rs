@@ -3,7 +3,7 @@
 #![allow(clippy::comparison_chain)]
 use anchor_lang::prelude::*;
 
-use instructions::{user::*};
+
 pub mod errors;
 pub mod state;
 pub mod utils;
@@ -13,6 +13,8 @@ pub mod ids;
 pub mod safe_methods;
 pub mod casting;
 pub mod controllers;
+use crate::instructions::{user::*};
+use crate::state::*;
 
 
 #[cfg(feature = "devnet")]
@@ -20,11 +22,12 @@ declare_id!("HkApQpEsdzdfHsedkuZvNEbmcQXfabobbb9Yf8wdz7AZ");
 
 #[program]
 pub mod vortex_contracts {
-  
-
-    use state::{order_params::{ModifyOrderParams, OrderParams}, position::PositionDirection, user::MarketType};
 
     use super::*;
+    use instructions::executors::SpotFulfillmentType;
+    use order_params::{ModifyOrderParams, OrderParams};
+    use position::PositionDirection;
+    use user::{MarketType, Swap};
 
     
     // User instructions

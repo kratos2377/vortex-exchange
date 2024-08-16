@@ -13,3 +13,7 @@ pub mod operations;
 pub mod margin_calculation;
 pub mod spot_market_map;
 pub mod order_params;
+pub mod spot_fulfillment_params;
+pub mod user_map;
+pub mod fulfillment_params;
+pub mod fulfillment;

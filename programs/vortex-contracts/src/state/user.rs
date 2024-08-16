@@ -2,8 +2,9 @@ use std::fmt;
 use anchor_lang::prelude::*;
 use anchor_spl::token_interface::{TokenAccount, TokenInterface};
 use borsh::{BorshDeserialize, BorshSerialize};
+use solana_program::sysvar::instructions;
 
-use crate::errors::VortexDexResult;
+use crate::{errors::VortexDexResult, instructions::constraints::{can_sign_for_user, is_stats_for_user}};
 
 use super::{dex_state::DexState, position::PositionDirection, spot_market::{SpotBalanceType, SpotMarket}, user_stats::UserStats};
 use crate::utils::{constants::{SPOT_WEIGHT_PRECISION, SPOT_WEIGHT_PRECISION_I128}, margin_utils::MarginRequirementType};
@@ -182,7 +183,6 @@ pub enum OrderTriggerCondition {
 pub enum MarketType {
     #[default]
     Spot,
-    Perp,
 }
 
 impl fmt::Display for MarketType {
@@ -259,4 +259,62 @@ impl OrderFillSimulation {
 
         Ok(self)
     }
+}
+
+
+#[derive(Clone, Copy, BorshSerialize, BorshDeserialize, PartialEq, Eq, Debug)]
+pub enum AssetType {
+    Base,
+    Quote,
+}
+
+#[derive(Accounts)]
+#[instruction(in_market_index: u16, out_market_index: u16, )]
+pub struct Swap<'info> {
+    pub state: Box<Account<'info, DexState>>,
+    #[account(
+        mut,
+        constraint = can_sign_for_user(&user, &authority)?
+    )]
+    pub user: AccountLoader<'info, User>,
+    #[account(
+        mut,
+        constraint = is_stats_for_user(&user, &user_stats)?
+    )]
+    pub user_stats: AccountLoader<'info, UserStats>,
+    pub authority: Signer<'info>,
+    #[account(
+        mut,
+        seeds = [b"spot_market_vault".as_ref(), out_market_index.to_le_bytes().as_ref()],
+        bump,
+    )]
+    pub out_spot_market_vault: Box<InterfaceAccount<'info, TokenAccount>>,
+    #[account(
+        mut,
+        seeds = [b"spot_market_vault".as_ref(), in_market_index.to_le_bytes().as_ref()],
+        bump,
+    )]
+    pub in_spot_market_vault: Box<InterfaceAccount<'info, TokenAccount>>,
+    #[account(
+        mut,
+        constraint = &out_spot_market_vault.mint.eq(&out_token_account.mint),
+        token::authority = authority
+    )]
+    pub out_token_account: Box<InterfaceAccount<'info, TokenAccount>>,
+    #[account(
+        mut,
+        constraint = &in_spot_market_vault.mint.eq(&in_token_account.mint),
+        token::authority = authority
+    )]
+    pub in_token_account: Box<InterfaceAccount<'info, TokenAccount>>,
+    pub token_program: Interface<'info, TokenInterface>,
+    #[account(
+        constraint = state.signer.eq(&drift_signer.key())
+    )]
+    /// CHECK: forced drift_signer
+    pub drift_signer: AccountInfo<'info>,
+    /// Instructions Sysvar for instruction introspection
+    /// CHECK: fixed instructions sysvar account
+    #[account(address = instructions::ID)]
+    pub instructions: UncheckedAccount<'info>,
 }
