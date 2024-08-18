@@ -182,6 +182,57 @@ pub struct SpotMarketVaultDepositRecord {
 
 
 #[event]
+#[derive(Default)]
+pub struct LiquidationRecord {
+    pub ts: i64,
+    pub liquidation_type: LiquidationType,
+    pub user: Pubkey,
+    pub liquidator: Pubkey,
+    pub margin_requirement: u128,
+    pub total_collateral: i128,
+    pub margin_freed: u64,
+    pub liquidation_id: u16,
+    pub bankrupt: bool,
+    pub canceled_order_ids: Vec<u32>,
+    pub liquidate_spot: LiquidateSpotRecord,
+    pub spot_bankruptcy: SpotBankruptcyRecord,
+}
+
+
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Debug, Default)]
+pub struct LiquidateSpotRecord {
+    pub asset_market_index: u16,
+    pub asset_price: i64,
+    pub asset_transfer: u128,
+    pub liability_market_index: u16,
+    pub liability_price: i64,
+    /// precision: token mint precision
+    pub liability_transfer: u128,
+    /// precision: token mint precision
+    pub if_fee: u64,
+}
+
+
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Debug, Default)]
+pub struct SpotBankruptcyRecord {
+    pub market_index: u16,
+    pub borrow_amount: u128,
+    pub if_payment: u128,
+    pub cumulative_deposit_interest_delta: u128,
+}
+
+#[derive(Clone, Copy, BorshSerialize, BorshDeserialize, PartialEq, Eq, Default)]
+pub enum LiquidationType {
+    #[default]
+    LiquidatePerp,
+    LiquidateSpot,
+    LiquidateBorrowForPerpPnl,
+    LiquidatePerpPnlForDeposit,
+    PerpBankruptcy,
+    SpotBankruptcy,
+}
+
+#[event]
 pub struct OrderRecord {
     pub ts: i64,
     pub user: Pubkey,
