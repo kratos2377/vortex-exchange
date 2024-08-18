@@ -55,7 +55,7 @@ pub struct DexState {
 }
 
 impl DexState {
-    const SIZE: usize = 992;
+    pub const SIZE: usize = 992;
 
     pub fn get_exchange_status(&self) -> VortexDexResult<BitFlags<ExchangeStatus>> {
         BitFlags::<ExchangeStatus>::from_bits(usize::from(self.exchange_status)).safe_unwrap()
