@@ -2,9 +2,12 @@ use std::{convert::identity, mem::size_of};
 
 use anchor_lang::prelude::*;
 use anchor_spl::{token::Token, token_2022::Token2022, token_interface::{Mint, TokenAccount, TokenInterface}};
+use pyth_solana_receiver_sdk::{cpi::accounts::InitPriceUpdate, program::PythSolanaReceiver};
 use serum_dex::error::DexError;
+use crate::{ids::admin_hot_wallet, instructions::{account::get_token_mint, constraints::{deposit_not_paused , spot_market_valid}}, oracle::OraclePriceData, user::User, user_stats::UserStats, utils::{constants::{FUEL_START_TS, IF_FACTOR_PRECISION, LIQUIDATION_FEE_PRECISION, PERCENTAGE_PRECISION}, fees_utils::validate_fee_structure, spot_market_utils::validate_spot_market_vault_amount}};
+use crate::{controllers::{self, token::close_vault}, dex_state::{DexState, ExchangeStatus, FeeStructure, OracleGuardRails}, events::SpotMarketVaultDepositRecord, fulfillment_params::serum::{SerumContext, SerumV3FulfillmentConfig}, get_then_update_id, load, load_mut, operations::SpotOperation, oracle::{get_oracle_price, HistoricalIndexData, HistoricalOracleData, OracleSource}, oracle_map::OracleMap, safe_decrement, spot_market::{AssetTier, MarketStatus, PoolBalance, SpotBalanceType, SpotFulfillmentConfigStatus, SpotMarket}, utils::{constants::{DEFAULT_LIQUIDATION_MARGIN_BUFFER_RATIO, QUOTE_SPOT_MARKET_INDEX, SPOT_BALANCE_PRECISION, SPOT_CUMULATIVE_INTEREST_PRECISION, TWENTY_FOUR_HOUR}, spot_market_utils::get_token_amount, validation_utils::{validate_borrow_rate, validate_margin_weights}}, validate};
 
-use crate::{controllers::{self, token::close_vault}, dex_state::{DexState, ExchangeStatus, FeeStructure, OracleGuardRails}, fulfillment_params::serum::{SerumContext, SerumV3FulfillmentConfig}, get_then_update_id, load, load_mut, oracle::{get_oracle_price, HistoricalIndexData, HistoricalOracleData, OracleSource}, oracle_map::OracleMap, safe_decrement, spot_market::{AssetTier, MarketStatus, PoolBalance, SpotFulfillmentConfigStatus, SpotMarket}, utils::{constants::{DEFAULT_LIQUIDATION_MARGIN_BUFFER_RATIO, QUOTE_SPOT_MARKET_INDEX, SPOT_CUMULATIVE_INTEREST_PRECISION}, validation_utils::{validate_borrow_rate, validate_margin_weights}}, validate};
+use super::pyth_oracle::PTYH_PRICE_FEED_SEED_PREFIX;
 
 
 
@@ -571,6 +574,1007 @@ pub struct DeleteInitializedSpotMarket<'info> {
     pub token_program: Interface<'info, TokenInterface>,
 }
 
+#[access_control(
+    deposit_not_paused(&ctx.accounts.state)
+    spot_market_valid(&ctx.accounts.spot_market)
+)]
+pub fn handle_deposit_into_spot_market_vault<'c: 'info, 'info>(
+    ctx: Context<'_, '_, 'c, 'info, DepositIntoSpotMarketVault<'info>>,
+    amount: u64,
+) -> Result<()> {
+    let spot_market = &mut load_mut!(ctx.accounts.spot_market)?;
+
+    validate!(
+        !spot_market.is_operation_paused(SpotOperation::Deposit),
+        DexError::DefaultError,
+        "spot market deposits paused"
+    )?;
+
+    let remaining_accounts_iter = &mut ctx.remaining_accounts.iter().peekable();
+
+    let mint = get_token_mint(remaining_accounts_iter)?;
+
+    msg!(
+        "depositing {} into spot market {} vault",
+        amount,
+        spot_market.market_index
+    );
+
+    let deposit_token_amount_before = spot_market.get_deposits()?;
+
+    let deposit_token_amount_after = deposit_token_amount_before.safe_add(amount.cast()?)?;
+
+    validate!(
+        deposit_token_amount_after > deposit_token_amount_before,
+        DexError::DefaultError,
+        "new_deposit_token_amount ({}) <= deposit_token_amount ({})",
+        deposit_token_amount_after,
+        deposit_token_amount_before
+    )?;
+
+    let token_precision = spot_market.get_precision();
+
+    let cumulative_deposit_interest_before = spot_market.cumulative_deposit_interest;
+
+    let cumulative_deposit_interest_after = deposit_token_amount_after
+        .safe_mul(SPOT_CUMULATIVE_INTEREST_PRECISION)?
+        .safe_div(spot_market.deposit_balance)?
+        .safe_mul(SPOT_BALANCE_PRECISION)?
+        .safe_div(token_precision.cast()?)?;
+
+    validate!(
+        cumulative_deposit_interest_after > cumulative_deposit_interest_before,
+        DexError::DefaultError,
+        "cumulative_deposit_interest_after ({}) <= cumulative_deposit_interest_before ({})",
+        cumulative_deposit_interest_after,
+        cumulative_deposit_interest_before
+    )?;
+
+    spot_market.cumulative_deposit_interest = cumulative_deposit_interest_after;
+
+    controllers::token::receive(
+        &ctx.accounts.token_program,
+        &ctx.accounts.source_vault,
+        &ctx.accounts.spot_market_vault,
+        &ctx.accounts.admin.to_account_info(),
+        amount,
+        &mint,
+    )?;
+
+    ctx.accounts.spot_market_vault.reload()?;
+    validate_spot_market_vault_amount(&spot_market, ctx.accounts.spot_market_vault.amount)?;
+
+    spot_market.validate_max_token_deposits_and_borrows(false)?;
+
+    emit!(SpotMarketVaultDepositRecord {
+        ts: Clock::get()?.unix_timestamp,
+        market_index: spot_market.market_index,
+        deposit_balance: spot_market.deposit_balance,
+        cumulative_deposit_interest_before,
+        cumulative_deposit_interest_after,
+        deposit_token_amount_before: deposit_token_amount_before.cast()?,
+        amount
+    });
+
+    Ok(())
+}
+
+
+#[access_control(
+    spot_market_valid(&ctx.accounts.spot_market)
+)]
+pub fn handle_update_spot_market_liquidation_fee(
+    ctx: Context<AdminUpdateSpotMarket>,
+    liquidator_fee: u32,
+    if_liquidation_fee: u32,
+) -> Result<()> {
+    let spot_market = &mut load_mut!(ctx.accounts.spot_market)?;
+    msg!(
+        "updating spot market {} liquidation fee",
+        spot_market.market_index
+    );
+
+    validate!(
+        liquidator_fee.safe_add(if_liquidation_fee)? < LIQUIDATION_FEE_PRECISION,
+        DexError::DefaultError,
+        "Total liquidation fee must be less than 100%"
+    )?;
+
+    validate!(
+        if_liquidation_fee <= LIQUIDATION_FEE_PRECISION / 10,
+        DexError::DefaultError,
+        "if_liquidation_fee must be <= 10%"
+    )?;
+
+    msg!(
+        "spot_market.liquidator_fee: {:?} -> {:?}",
+        spot_market.liquidator_fee,
+        liquidator_fee
+    );
+
+    msg!(
+        "spot_market.if_liquidation_fee: {:?} -> {:?}",
+        spot_market.if_liquidation_fee,
+        if_liquidation_fee
+    );
+
+    spot_market.liquidator_fee = liquidator_fee;
+    spot_market.if_liquidation_fee = if_liquidation_fee;
+    Ok(())
+}
+
+#[access_control(
+    spot_market_valid(&ctx.accounts.spot_market)
+)]
+pub fn handle_update_withdraw_guard_threshold(
+    ctx: Context<AdminUpdateSpotMarket>,
+    withdraw_guard_threshold: u64,
+) -> Result<()> {
+    let spot_market = &mut load_mut!(ctx.accounts.spot_market)?;
+    msg!(
+        "updating spot market withdraw guard threshold {}",
+        spot_market.market_index
+    );
+
+    msg!(
+        "spot_market.withdraw_guard_threshold: {:?} -> {:?}",
+        spot_market.withdraw_guard_threshold,
+        withdraw_guard_threshold
+    );
+    spot_market.withdraw_guard_threshold = withdraw_guard_threshold;
+    Ok(())
+}
+
+#[access_control(
+    spot_market_valid(&ctx.accounts.spot_market)
+)]
+pub fn handle_update_spot_market_if_factor(
+    ctx: Context<AdminUpdateSpotMarket>,
+    spot_market_index: u16,
+    user_if_factor: u32,
+    total_if_factor: u32,
+) -> Result<()> {
+    let spot_market = &mut load_mut!(ctx.accounts.spot_market)?;
+
+    msg!("spot market {}", spot_market.market_index);
+
+    validate!(
+        spot_market.market_index == spot_market_index,
+        DexError::DefaultError,
+        "spot_market_index dne spot_market.index"
+    )?;
+
+    validate!(
+        user_if_factor <= total_if_factor,
+        DexError::DefaultError,
+        "user_if_factor must be <= total_if_factor"
+    )?;
+
+    validate!(
+        total_if_factor <= IF_FACTOR_PRECISION.cast()?,
+        DexError::DefaultError,
+        "total_if_factor must be <= 100%"
+    )?;
+
+    msg!(
+        "spot_market.user_if_factor: {:?} -> {:?}",
+        spot_market.insurance_fund.user_factor,
+        user_if_factor
+    );
+    msg!(
+        "spot_market.total_if_factor: {:?} -> {:?}",
+        spot_market.insurance_fund.total_factor,
+        total_if_factor
+    );
+
+    spot_market.insurance_fund.user_factor = user_if_factor;
+    spot_market.insurance_fund.total_factor = total_if_factor;
+
+    Ok(())
+}
+
+#[access_control(
+    spot_market_valid(&ctx.accounts.spot_market)
+)]
+pub fn handle_update_spot_market_revenue_settle_period(
+    ctx: Context<AdminUpdateSpotMarket>,
+    revenue_settle_period: i64,
+) -> Result<()> {
+    let spot_market = &mut load_mut!(ctx.accounts.spot_market)?;
+    msg!("spot market {}", spot_market.market_index);
+
+    validate!(revenue_settle_period > 0, DexError::DefaultError)?;
+    msg!(
+        "spot_market.revenue_settle_period: {:?} -> {:?}",
+        spot_market.insurance_fund.revenue_settle_period,
+        revenue_settle_period
+    );
+    spot_market.insurance_fund.revenue_settle_period = revenue_settle_period;
+    Ok(())
+}
+
+#[access_control(
+    spot_market_valid(&ctx.accounts.spot_market)
+)]
+pub fn handle_update_spot_market_status(
+    ctx: Context<AdminUpdateSpotMarket>,
+    status: MarketStatus,
+) -> Result<()> {
+    status.validate_not_deprecated()?;
+    let spot_market = &mut load_mut!(ctx.accounts.spot_market)?;
+    msg!("spot market {}", spot_market.market_index);
+
+    msg!(
+        "spot_market.status: {:?} -> {:?}",
+        spot_market.status,
+        status
+    );
+
+    spot_market.status = status;
+    Ok(())
+}
+
+#[access_control(
+spot_market_valid(&ctx.accounts.spot_market)
+)]
+pub fn handle_update_spot_market_paused_operations(
+    ctx: Context<AdminUpdateSpotMarket>,
+    paused_operations: u8,
+) -> Result<()> {
+    let spot_market = &mut load_mut!(ctx.accounts.spot_market)?;
+    msg!("spot market {}", spot_market.market_index);
+
+    spot_market.paused_operations = paused_operations;
+
+    SpotOperation::log_all_operations_paused(spot_market.paused_operations);
+
+    Ok(())
+}
+
+#[access_control(
+    spot_market_valid(&ctx.accounts.spot_market)
+)]
+pub fn handle_update_spot_market_asset_tier(
+    ctx: Context<AdminUpdateSpotMarket>,
+    asset_tier: AssetTier,
+) -> Result<()> {
+    let spot_market = &mut load_mut!(ctx.accounts.spot_market)?;
+    msg!("spot market {}", spot_market.market_index);
+
+    if spot_market.initial_asset_weight > 0 {
+        validate!(
+            matches!(asset_tier, AssetTier::Collateral | AssetTier::Protected),
+            DexError::DefaultError,
+            "initial_asset_weight > 0 so AssetTier must be collateral or protected"
+        )?;
+    }
+
+    msg!(
+        "spot_market.asset_tier: {:?} -> {:?}",
+        spot_market.asset_tier,
+        asset_tier
+    );
+
+    spot_market.asset_tier = asset_tier;
+    Ok(())
+}
+
+#[access_control(
+    spot_market_valid(&ctx.accounts.spot_market)
+)]
+pub fn handle_update_spot_market_margin_weights(
+    ctx: Context<AdminUpdateSpotMarket>,
+    initial_asset_weight: u32,
+    maintenance_asset_weight: u32,
+    initial_liability_weight: u32,
+    maintenance_liability_weight: u32,
+    imf_factor: u32,
+) -> Result<()> {
+    let spot_market = &mut load_mut!(ctx.accounts.spot_market)?;
+    msg!("spot market {}", spot_market.market_index);
+
+    validate_margin_weights(
+        spot_market.market_index,
+        initial_asset_weight,
+        maintenance_asset_weight,
+        initial_liability_weight,
+        maintenance_liability_weight,
+        imf_factor,
+    )?;
+
+    msg!(
+        "spot_market.initial_asset_weight: {:?} -> {:?}",
+        spot_market.initial_asset_weight,
+        initial_asset_weight
+    );
+
+    msg!(
+        "spot_market.maintenance_asset_weight: {:?} -> {:?}",
+        spot_market.maintenance_asset_weight,
+        maintenance_asset_weight
+    );
+
+    msg!(
+        "spot_market.initial_liability_weight: {:?} -> {:?}",
+        spot_market.initial_liability_weight,
+        initial_liability_weight
+    );
+
+    msg!(
+        "spot_market.maintenance_liability_weight: {:?} -> {:?}",
+        spot_market.maintenance_liability_weight,
+        maintenance_liability_weight
+    );
+
+    msg!(
+        "spot_market.imf_factor: {:?} -> {:?}",
+        spot_market.imf_factor,
+        imf_factor
+    );
+
+    spot_market.initial_asset_weight = initial_asset_weight;
+    spot_market.maintenance_asset_weight = maintenance_asset_weight;
+    spot_market.initial_liability_weight = initial_liability_weight;
+    spot_market.maintenance_liability_weight = maintenance_liability_weight;
+    spot_market.imf_factor = imf_factor;
+
+    Ok(())
+}
+
+#[access_control(
+    spot_market_valid(&ctx.accounts.spot_market)
+)]
+pub fn handle_update_spot_market_borrow_rate(
+    ctx: Context<AdminUpdateSpotMarket>,
+    optimal_utilization: u32,
+    optimal_borrow_rate: u32,
+    max_borrow_rate: u32,
+    min_borrow_rate: Option<u8>,
+) -> Result<()> {
+    let spot_market = &mut load_mut!(ctx.accounts.spot_market)?;
+    msg!("spot market {}", spot_market.market_index);
+
+    validate_borrow_rate(
+        optimal_utilization,
+        optimal_borrow_rate,
+        max_borrow_rate,
+        min_borrow_rate
+            .unwrap_or(spot_market.min_borrow_rate)
+            .cast::<u32>()?
+            * ((PERCENTAGE_PRECISION / 200) as u32),
+    )?;
+
+    msg!(
+        "spot_market.optimal_utilization: {:?} -> {:?}",
+        spot_market.optimal_utilization,
+        optimal_utilization
+    );
+
+    msg!(
+        "spot_market.optimal_borrow_rate: {:?} -> {:?}",
+        spot_market.optimal_borrow_rate,
+        optimal_borrow_rate
+    );
+
+    msg!(
+        "spot_market.max_borrow_rate: {:?} -> {:?}",
+        spot_market.max_borrow_rate,
+        max_borrow_rate
+    );
+
+    spot_market.optimal_utilization = optimal_utilization;
+    spot_market.optimal_borrow_rate = optimal_borrow_rate;
+    spot_market.max_borrow_rate = max_borrow_rate;
+
+    if let Some(min_borrow_rate) = min_borrow_rate {
+        msg!(
+            "spot_market.min_borrow_rate: {:?} -> {:?}",
+            spot_market.min_borrow_rate,
+            min_borrow_rate
+        );
+        spot_market.min_borrow_rate = min_borrow_rate
+    }
+
+    Ok(())
+}
+
+#[access_control(
+    spot_market_valid(&ctx.accounts.spot_market)
+)]
+pub fn handle_update_spot_market_max_token_deposits(
+    ctx: Context<AdminUpdateSpotMarket>,
+    max_token_deposits: u64,
+) -> Result<()> {
+    let spot_market = &mut load_mut!(ctx.accounts.spot_market)?;
+    msg!("spot market {}", spot_market.market_index);
+
+    msg!(
+        "spot_market.max_token_deposits: {:?} -> {:?}",
+        spot_market.max_token_deposits,
+        max_token_deposits
+    );
+
+    spot_market.max_token_deposits = max_token_deposits;
+    Ok(())
+}
+
+#[access_control(
+    spot_market_valid(&ctx.accounts.spot_market)
+)]
+pub fn handle_update_spot_market_max_token_borrows(
+    ctx: Context<AdminUpdateSpotMarket>,
+    max_token_borrows_fraction: u16,
+) -> Result<()> {
+    let spot_market = &mut load_mut!(ctx.accounts.spot_market)?;
+    msg!("spot market {}", spot_market.market_index);
+
+    msg!(
+        "spot_market.max_token_borrows_fraction: {:?} -> {:?}",
+        spot_market.max_token_borrows_fraction,
+        max_token_borrows_fraction
+    );
+
+    let current_spot_tokens_borrows: u64 = spot_market.get_borrows()?.cast()?;
+    let new_max_token_borrows = spot_market
+        .max_token_deposits
+        .safe_mul(max_token_borrows_fraction.cast()?)?
+        .safe_div(10000)?;
+
+    validate!(
+        current_spot_tokens_borrows <= new_max_token_borrows,
+        DexError::InvalidSpotMarketInitialization,
+        "spot borrows {} > max_token_borrows {}",
+        current_spot_tokens_borrows,
+        max_token_borrows_fraction
+    )?;
+
+    spot_market.max_token_borrows_fraction = max_token_borrows_fraction;
+    Ok(())
+}
+
+#[access_control(
+spot_market_valid(&ctx.accounts.spot_market)
+)]
+pub fn handle_update_spot_market_scale_initial_asset_weight_start(
+    ctx: Context<AdminUpdateSpotMarket>,
+    scale_initial_asset_weight_start: u64,
+) -> Result<()> {
+    let spot_market = &mut load_mut!(ctx.accounts.spot_market)?;
+    msg!("spot market {}", spot_market.market_index);
+
+    msg!(
+        "spot_market.scale_initial_asset_weight_start: {:?} -> {:?}",
+        spot_market.scale_initial_asset_weight_start,
+        scale_initial_asset_weight_start
+    );
+
+    spot_market.scale_initial_asset_weight_start = scale_initial_asset_weight_start;
+    Ok(())
+}
+
+#[access_control(
+    spot_market_valid(&ctx.accounts.spot_market)
+)]
+pub fn handle_update_spot_market_orders_enabled(
+    ctx: Context<AdminUpdateSpotMarket>,
+    orders_enabled: bool,
+) -> Result<()> {
+    let spot_market = &mut load_mut!(ctx.accounts.spot_market)?;
+    msg!("spot market {}", spot_market.market_index);
+
+    msg!(
+        "spot_market.orders_enabled: {:?} -> {:?}",
+        spot_market.orders_enabled,
+        orders_enabled
+    );
+
+    spot_market.orders_enabled = orders_enabled;
+    Ok(())
+}
+
+#[access_control(
+    spot_market_valid(&ctx.accounts.spot_market)
+)]
+pub fn handle_update_spot_market_oracle(
+    ctx: Context<AdminUpdateSpotMarketOracle>,
+    oracle: Pubkey,
+    oracle_source: OracleSource,
+) -> Result<()> {
+    let spot_market = &mut load_mut!(ctx.accounts.spot_market)?;
+    msg!("updating spot market {} oracle", spot_market.market_index);
+    let clock = Clock::get()?;
+
+    OracleMap::validate_oracle_account_info(&ctx.accounts.oracle)?;
+
+    validate!(
+        ctx.accounts.oracle.key == &oracle,
+        DexError::DefaultError,
+        "oracle account info ({:?}) and ix data ({:?}) must match",
+        ctx.accounts.oracle.key,
+        oracle
+    )?;
+
+    // Verify oracle is readable
+    let OraclePriceData {
+        price: _oracle_price,
+        delay: _oracle_delay,
+        ..
+    } = get_oracle_price(&oracle_source, &ctx.accounts.oracle, clock.slot)?;
+
+    msg!(
+        "spot_market.oracle {:?} -> {:?}",
+        spot_market.oracle,
+        oracle
+    );
+
+    msg!(
+        "spot_market.oracle_source {:?} -> {:?}",
+        spot_market.oracle_source,
+        oracle_source
+    );
+
+    spot_market.oracle = oracle;
+    spot_market.oracle_source = oracle_source;
+    Ok(())
+}
+
+#[access_control(
+    spot_market_valid(&ctx.accounts.spot_market)
+)]
+pub fn handle_update_spot_market_expiry(
+    ctx: Context<AdminUpdateSpotMarket>,
+    expiry_ts: i64,
+) -> Result<()> {
+    let spot_market = &mut load_mut!(ctx.accounts.spot_market)?;
+    msg!("updating spot market {} expiry", spot_market.market_index);
+    let now = Clock::get()?.unix_timestamp;
+
+    validate!(
+        now < expiry_ts,
+        DexError::DefaultError,
+        "Market expiry ts must later than current clock timestamp"
+    )?;
+
+    msg!(
+        "spot_market.status {:?} -> {:?}",
+        spot_market.status,
+        MarketStatus::ReduceOnly
+    );
+    msg!(
+        "spot_market.expiry_ts {} -> {}",
+        spot_market.expiry_ts,
+        expiry_ts
+    );
+
+    // automatically enter reduce only
+    spot_market.status = MarketStatus::ReduceOnly;
+    spot_market.expiry_ts = expiry_ts;
+
+    Ok(())
+}
+
+pub fn handle_init_user_fuel(
+    ctx: Context<InitUserFuel>,
+    fuel_bonus_deposits: Option<u32>,
+    fuel_bonus_borrows: Option<u32>,
+    fuel_bonus_taker: Option<u32>,
+    fuel_bonus_maker: Option<u32>,
+    fuel_bonus_insurance: Option<u32>,
+) -> Result<()> {
+    let clock: Clock = Clock::get()?;
+    let now_u32 = clock.unix_timestamp as u32;
+
+    let user = &mut load_mut!(ctx.accounts.user)?;
+    let user_stats = &mut load_mut!(ctx.accounts.user_stats)?;
+
+    validate!(
+        user.last_fuel_bonus_update_ts < FUEL_START_TS as u32,
+        DexError::DefaultError,
+        "User must not have begun earning fuel"
+    )?;
+
+    if let Some(fuel_bonus_deposits) = fuel_bonus_deposits {
+        msg!(
+            "user_stats.fuel_deposits {:?} -> {:?}",
+            user_stats.fuel_deposits,
+            user_stats.fuel_deposits.saturating_add(fuel_bonus_deposits)
+        );
+        user_stats.fuel_deposits = user_stats.fuel_deposits.saturating_add(fuel_bonus_deposits);
+    }
+    if let Some(fuel_bonus_borrows) = fuel_bonus_borrows {
+        msg!(
+            "user_stats.fuel_borrows {:?} -> {:?}",
+            user_stats.fuel_borrows,
+            user_stats.fuel_borrows.saturating_add(fuel_bonus_borrows)
+        );
+        user_stats.fuel_borrows = user_stats.fuel_borrows.saturating_add(fuel_bonus_borrows);
+    }
+
+    if let Some(fuel_bonus_taker) = fuel_bonus_taker {
+        msg!(
+            "user_stats.fuel_taker {:?} -> {:?}",
+            user_stats.fuel_taker,
+            user_stats.fuel_taker.saturating_add(fuel_bonus_taker)
+        );
+        user_stats.fuel_taker = user_stats.fuel_taker.saturating_add(fuel_bonus_taker);
+    }
+    if let Some(fuel_bonus_maker) = fuel_bonus_maker {
+        msg!(
+            "user_stats.fuel_maker {:?} -> {:?}",
+            user_stats.fuel_maker,
+            user_stats.fuel_maker.saturating_add(fuel_bonus_maker)
+        );
+        user_stats.fuel_maker = user_stats.fuel_maker.saturating_add(fuel_bonus_maker);
+    }
+
+    if let Some(fuel_bonus_insurance) = fuel_bonus_insurance {
+        msg!(
+            "user_stats.fuel_insurance {:?} -> {:?}",
+            user_stats.fuel_insurance,
+            user_stats
+                .fuel_insurance
+                .saturating_add(fuel_bonus_insurance)
+        );
+        user_stats.fuel_insurance = user_stats
+            .fuel_insurance
+            .saturating_add(fuel_bonus_insurance);
+    }
+
+    user.last_fuel_bonus_update_ts = now_u32;
+    user_stats.last_fuel_if_bonus_update_ts = now_u32;
+
+    Ok(())
+}
+
+
+#[access_control(
+    spot_market_valid(&ctx.accounts.spot_market)
+)]
+pub fn handle_update_spot_market_step_size_and_tick_size(
+    ctx: Context<AdminUpdateSpotMarket>,
+    step_size: u64,
+    tick_size: u64,
+) -> Result<()> {
+    let spot_market = &mut load_mut!(ctx.accounts.spot_market)?;
+    msg!("spot market {}", spot_market.market_index);
+
+    validate!(
+        spot_market.market_index == 0 || step_size > 0 && tick_size > 0,
+        ErrorCode::DefaultError
+    )?;
+
+    msg!(
+        "spot_market.order_step_size: {:?} -> {:?}",
+        spot_market.order_step_size,
+        step_size
+    );
+
+    msg!(
+        "spot_market.order_tick_size: {:?} -> {:?}",
+        spot_market.order_tick_size,
+        tick_size
+    );
+
+    spot_market.order_step_size = step_size;
+    spot_market.order_tick_size = tick_size;
+    Ok(())
+}
+
+
+#[access_control(
+    spot_market_valid(&ctx.accounts.spot_market)
+)]
+pub fn handle_update_spot_market_min_order_size(
+    ctx: Context<AdminUpdateSpotMarket>,
+    order_size: u64,
+) -> Result<()> {
+    let spot_market = &mut load_mut!(ctx.accounts.spot_market)?;
+    msg!("spot market {}", spot_market.market_index);
+
+    validate!(
+        spot_market.market_index == 0 || order_size > 0,
+        ErrorCode::DefaultError
+    )?;
+
+    msg!(
+        "spot_market.min_order_size: {:?} -> {:?}",
+        spot_market.min_order_size,
+        order_size
+    );
+
+    spot_market.min_order_size = order_size;
+    Ok(())
+}
+
+#[access_control(
+    spot_market_valid(&ctx.accounts.spot_market)
+)]
+pub fn handle_update_spot_market_if_paused_operations(
+    ctx: Context<AdminUpdateSpotMarket>,
+    paused_operations: u8,
+) -> Result<()> {
+    let spot_market = &mut load_mut!(ctx.accounts.spot_market)?;
+    spot_market.if_paused_operations = paused_operations;
+    msg!("spot market {}", spot_market.market_index);
+    Ok(())
+}
+
+#[access_control(
+    spot_market_valid(&ctx.accounts.spot_market)
+)]
+pub fn handle_update_spot_market_name(
+    ctx: Context<AdminUpdateSpotMarket>,
+    name: [u8; 32],
+) -> Result<()> {
+    let mut spot_market = load_mut!(ctx.accounts.spot_market)?;
+    msg!("spot_market.name: {:?} -> {:?}", spot_market.name, name);
+    spot_market.name = name;
+    Ok(())
+}
+
+
+pub fn handle_update_spot_fee_structure(
+    ctx: Context<AdminUpdateState>,
+    fee_structure: FeeStructure,
+) -> Result<()> {
+    validate_fee_structure(&fee_structure)?;
+
+    msg!(
+        "spot_fee_structure: {:?} -> {:?}",
+        ctx.accounts.state.spot_fee_structure,
+        fee_structure
+    );
+
+    ctx.accounts.state.spot_fee_structure = fee_structure;
+    Ok(())
+}
+
+pub fn handle_update_initial_pct_to_liquidate(
+    ctx: Context<AdminUpdateState>,
+    initial_pct_to_liquidate: u16,
+) -> Result<()> {
+    msg!(
+        "initial_pct_to_liquidate: {} -> {}",
+        ctx.accounts.state.initial_pct_to_liquidate,
+        initial_pct_to_liquidate
+    );
+
+    ctx.accounts.state.initial_pct_to_liquidate = initial_pct_to_liquidate;
+    Ok(())
+}
+
+pub fn handle_update_liquidation_duration(
+    ctx: Context<AdminUpdateState>,
+    liquidation_duration: u8,
+) -> Result<()> {
+    msg!(
+        "liquidation_duration: {} -> {}",
+        ctx.accounts.state.liquidation_duration,
+        liquidation_duration
+    );
+
+    ctx.accounts.state.liquidation_duration = liquidation_duration;
+    Ok(())
+}
+
+pub fn handle_update_liquidation_margin_buffer_ratio(
+    ctx: Context<AdminUpdateState>,
+    liquidation_margin_buffer_ratio: u32,
+) -> Result<()> {
+    msg!(
+        "liquidation_margin_buffer_ratio: {} -> {}",
+        ctx.accounts.state.liquidation_margin_buffer_ratio,
+        liquidation_margin_buffer_ratio
+    );
+
+    ctx.accounts.state.liquidation_margin_buffer_ratio = liquidation_margin_buffer_ratio;
+    Ok(())
+}
+
+pub fn handle_update_oracle_guard_rails(
+    ctx: Context<AdminUpdateState>,
+    oracle_guard_rails: OracleGuardRails,
+) -> Result<()> {
+    msg!(
+        "oracle_guard_rails: {:?} -> {:?}",
+        ctx.accounts.state.oracle_guard_rails,
+        oracle_guard_rails
+    );
+
+    ctx.accounts.state.oracle_guard_rails = oracle_guard_rails;
+    Ok(())
+}
+
+
+pub fn handle_update_state_settlement_duration(
+    ctx: Context<AdminUpdateState>,
+    settlement_duration: u16,
+) -> Result<()> {
+    msg!(
+        "settlement_duration: {} -> {}",
+        ctx.accounts.state.settlement_duration,
+        settlement_duration
+    );
+
+    ctx.accounts.state.settlement_duration = settlement_duration;
+    Ok(())
+}
+
+
+pub fn handle_update_state_max_initialize_user_fee(
+    ctx: Context<AdminUpdateState>,
+    max_initialize_user_fee: u16,
+) -> Result<()> {
+    msg!(
+        "max_initialize_user_fee: {} -> {}",
+        ctx.accounts.state.max_initialize_user_fee,
+        max_initialize_user_fee
+    );
+
+    ctx.accounts.state.max_initialize_user_fee = max_initialize_user_fee;
+    Ok(())
+}
+
+
+pub fn handle_update_spot_market_fuel(
+    ctx: Context<AdminUpdateSpotMarket>,
+    fuel_boost_deposits: Option<u8>,
+    fuel_boost_borrows: Option<u8>,
+    fuel_boost_taker: Option<u8>,
+    fuel_boost_maker: Option<u8>,
+    fuel_boost_insurance: Option<u8>,
+) -> Result<()> {
+    let spot_market = &mut load_mut!(ctx.accounts.spot_market)?;
+    msg!("spot market {}", spot_market.market_index);
+
+    if let Some(fuel_boost_taker) = fuel_boost_taker {
+        msg!(
+            "spot_market.fuel_boost_taker: {:?} -> {:?}",
+            spot_market.fuel_boost_taker,
+            fuel_boost_taker
+        );
+        spot_market.fuel_boost_taker = fuel_boost_taker;
+    } else {
+        msg!("spot_market.fuel_boost_taker: unchanged");
+    }
+
+    if let Some(fuel_boost_maker) = fuel_boost_maker {
+        msg!(
+            "spot_market.fuel_boost_maker: {:?} -> {:?}",
+            spot_market.fuel_boost_maker,
+            fuel_boost_maker
+        );
+        spot_market.fuel_boost_maker = fuel_boost_maker;
+    } else {
+        msg!("spot_market.fuel_boost_maker: unchanged");
+    }
+
+    if let Some(fuel_boost_deposits) = fuel_boost_deposits {
+        msg!(
+            "spot_market.fuel_boost_deposits: {:?} -> {:?}",
+            spot_market.fuel_boost_deposits,
+            fuel_boost_deposits
+        );
+        spot_market.fuel_boost_deposits = fuel_boost_deposits;
+    } else {
+        msg!("spot_market.fuel_boost_deposits: unchanged");
+    }
+
+    if let Some(fuel_boost_borrows) = fuel_boost_borrows {
+        msg!(
+            "spot_market.fuel_boost_borrows: {:?} -> {:?}",
+            spot_market.fuel_boost_borrows,
+            fuel_boost_borrows
+        );
+        spot_market.fuel_boost_borrows = fuel_boost_borrows;
+    } else {
+        msg!("spot_market.fuel_boost_borrows: unchanged");
+    }
+
+    if let Some(fuel_boost_insurance) = fuel_boost_insurance {
+        msg!(
+            "spot_market.fuel_boost_insurance: {:?} -> {:?}",
+            spot_market.fuel_boost_insurance,
+            fuel_boost_insurance
+        );
+        spot_market.fuel_boost_insurance = fuel_boost_insurance;
+    } else {
+        msg!("spot_market.fuel_boost_insurance: unchanged");
+    }
+
+    Ok(())
+}
+
+
+pub fn handle_update_admin(ctx: Context<AdminUpdateState>, admin: Pubkey) -> Result<()> {
+    msg!("admin: {:?} -> {:?}", ctx.accounts.state.admin, admin);
+    ctx.accounts.state.admin = admin;
+    Ok(())
+}
+
+pub fn handle_update_whitelist_mint(
+    ctx: Context<AdminUpdateState>,
+    whitelist_mint: Pubkey,
+) -> Result<()> {
+    msg!(
+        "whitelist_mint: {:?} -> {:?}",
+        ctx.accounts.state.whitelist_mint,
+        whitelist_mint
+    );
+
+    ctx.accounts.state.whitelist_mint = whitelist_mint;
+    Ok(())
+}
+
+pub fn handle_update_discount_mint(
+    ctx: Context<AdminUpdateState>,
+    discount_mint: Pubkey,
+) -> Result<()> {
+    msg!(
+        "discount_mint: {:?} -> {:?}",
+        ctx.accounts.state.discount_mint,
+        discount_mint
+    );
+
+    ctx.accounts.state.discount_mint = discount_mint;
+    Ok(())
+}
+
+pub fn handle_update_exchange_status(
+    ctx: Context<AdminUpdateState>,
+    exchange_status: u8,
+) -> Result<()> {
+    msg!(
+        "exchange_status: {:?} -> {:?}",
+        ctx.accounts.state.exchange_status,
+        exchange_status
+    );
+
+    ctx.accounts.state.exchange_status = exchange_status;
+    Ok(())
+}
+
+
+pub fn handle_update_spot_auction_duration(
+    ctx: Context<AdminUpdateState>,
+    default_spot_auction_duration: u8,
+) -> Result<()> {
+    msg!(
+        "default_spot_auction_duration: {:?} -> {:?}",
+        ctx.accounts.state.default_spot_auction_duration,
+        default_spot_auction_duration
+    );
+
+    ctx.accounts.state.default_spot_auction_duration = default_spot_auction_duration;
+    Ok(())
+}
+
+pub fn handle_initialize_pyth_pull_oracle(
+    ctx: Context<InitPythPullPriceFeed>,
+    feed_id: [u8; 32],
+) -> Result<()> {
+    let cpi_program = ctx.accounts.pyth_solana_receiver.to_account_info().clone();
+    let cpi_accounts = InitPriceUpdate {
+        payer: ctx.accounts.admin.to_account_info().clone(),
+        price_update_account: ctx.accounts.price_feed.to_account_info().clone(),
+        system_program: ctx.accounts.system_program.to_account_info().clone(),
+        write_authority: ctx.accounts.price_feed.to_account_info().clone(),
+    };
+
+    let seeds = &[
+        PTYH_PRICE_FEED_SEED_PREFIX,
+        feed_id.as_ref(),
+        &[ctx.bumps.price_feed],
+    ];
+    let signer_seeds = &[&seeds[..]];
+    let cpi_context = CpiContext::new_with_signer(cpi_program, cpi_accounts, signer_seeds);
+
+    pyth_solana_receiver_sdk::cpi::init_price_update(cpi_context, feed_id)?;
+
+    Ok(())
+}
+
+
 #[derive(Accounts)]
 #[instruction(market_index: u16)]
 pub struct InitializeSerumFulfillmentConfig<'info> {
@@ -642,4 +1646,91 @@ pub struct UpdateSerumVault<'info> {
     #[account(mut)]
     pub admin: Signer<'info>,
     pub srm_vault: Box<InterfaceAccount<'info, TokenAccount>>,
+}
+
+#[derive(Accounts)]
+pub struct DepositIntoSpotMarketVault<'info> {
+    pub state: Box<Account<'info, DexState>>,
+    #[account(mut)]
+    pub spot_market: AccountLoader<'info, SpotMarket>,
+    #[account(
+        constraint = admin.key() == admin_hot_wallet::id() || admin.key() == state.admin
+    )]
+    pub admin: Signer<'info>,
+    #[account(
+        mut,
+        token::authority = admin
+    )]
+    pub source_vault: Box<InterfaceAccount<'info, TokenAccount>>,
+    #[account(
+        mut,
+        constraint = spot_market.load()?.vault == spot_market_vault.key()
+    )]
+    pub spot_market_vault: Box<InterfaceAccount<'info, TokenAccount>>,
+    pub token_program: Interface<'info, TokenInterface>,
+}
+
+
+#[derive(Accounts)]
+pub struct AdminUpdateSpotMarket<'info> {
+    pub admin: Signer<'info>,
+    #[account(
+        has_one = admin
+    )]
+    pub state: Box<Account<'info, DexState>>,
+    #[account(mut)]
+    pub spot_market: AccountLoader<'info, SpotMarket>,
+}
+
+#[derive(Accounts)]
+pub struct AdminUpdateSpotMarketOracle<'info> {
+    pub admin: Signer<'info>,
+    #[account(
+        has_one = admin
+    )]
+    pub state: Box<Account<'info, DexState>>,
+    #[account(mut)]
+    pub spot_market: AccountLoader<'info, SpotMarket>,
+    /// CHECK: checked in `initialize_spot_market`
+    pub oracle: AccountInfo<'info>,
+}
+
+#[derive(Accounts)]
+pub struct InitUserFuel<'info> {
+    #[account(
+        address = admin_hot_wallet::id()
+    )]
+    pub admin: Signer<'info>, // todo
+    pub state: Box<Account<'info, DexState>>,
+    #[account(mut)]
+    pub user: AccountLoader<'info, User>,
+    #[account(mut)]
+    pub user_stats: AccountLoader<'info, UserStats>,
+}
+
+#[derive(Accounts)]
+pub struct AdminUpdateState<'info> {
+    pub admin: Signer<'info>,
+    #[account(
+        mut,
+        has_one = admin
+    )]
+    pub state: Box<Account<'info, DexState>>,
+}
+
+
+#[derive(Accounts)]
+#[instruction(feed_id : [u8; 32])]
+pub struct InitPythPullPriceFeed<'info> {
+    #[account(mut)]
+    pub admin: Signer<'info>,
+    pub pyth_solana_receiver: Program<'info, PythSolanaReceiver>,
+    /// CHECK: This account's seeds are checked
+    #[account(mut, seeds = [PTYH_PRICE_FEED_SEED_PREFIX, &feed_id], bump)]
+    pub price_feed: AccountInfo<'info>,
+    pub system_program: Program<'info, System>,
+    #[account(
+        has_one = admin
+    )]
+    pub state: Box<Account<'info, DexState>>,
 }

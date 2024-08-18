@@ -3,7 +3,7 @@ use anchor_spl::{associated_token::AssociatedToken, token::{Token, TokenAccount}
 use borsh::{BorshDeserialize, BorshSerialize};
 use solana_program::{program::invoke, system_instruction::transfer, sysvar::instructions};
 
-use crate::{casting::Cast, controllers::{self, orders::ModifyOrderId, spot_balance::update_revenue_pool_balances, spot_position::{charge_withdraw_fee, update_spot_balances_and_cumulative_deposits, update_spot_balances_and_cumulative_deposits_with_limits}}, errors::DexError, get_then_update_id, ids::{jupiter_mainnet_4, jupiter_mainnet_6, marinade_mainnet, serum_program}, instructions::{account::{get_token_mint, load_maps, AccountMaps}, constraints::{can_sign_for_user, is_stats_for_user}}, load, load_mut, print_error, safe_decrement, safe_increment, state::{dex_state::{DexState, ExchangeStatus}, events::{DepositDirection, DepositExplanation, DepositRecord, NewUserAccountRecord, OrderActionExplanation, SwapRecord}, fulfillment_params::{serum::SerumFulfillmentParams, vortex::MatchFulfillmentParams}, operations::SpotOperation, oracle::StrictOraclePrice, order_params::{ModifyOrderParams, OrderParams, PlaceOrderOptions, PostOnlyParam}, position::PositionDirection, spot_fulfillment_params::SpotFulfillmentParams, spot_market::{MarketStatus, SpotBalanceType}, spot_market_map::{get_writable_spot_market_set, get_writable_spot_market_set_from_many, MarketSet}, user::{MarketType, OrderType, User}, user_map::{load_user_maps, UserMap, UserStatsMap}, user_stats::UserStats}, utils::{self, constants::{QUOTE_SPOT_MARKET_INDEX, THIRTEEN_DAY}, liquidation_utils::is_user_being_liquidated, margin_utils::{calculate_max_withdrawable_amount, meets_withdraw_margin_requirement, validate_spot_margin_trading, MarginRequirementType}, spot_market_utils::{self, get_token_value}, swap_utils::{calculate_swap_price, validate_price_bands_for_swap}, token_utils, validation_utils::validate_user_deletion}, validate};
+use crate::{casting::Cast, controllers::{self, orders::ModifyOrderId, spot_balance::update_revenue_pool_balances, spot_position::{charge_withdraw_fee, update_spot_balances_and_cumulative_deposits, update_spot_balances_and_cumulative_deposits_with_limits}}, errors::DexError, get_then_update_id, ids::{jupiter_mainnet_4, jupiter_mainnet_6, marinade_mainnet, serum_program}, instructions::{account::{get_token_mint, load_maps, AccountMaps}, constraints::{can_sign_for_user, is_stats_for_user}}, load, load_mut, oracle::{PrelaunchOracle, PrelaunchOracleParams}, print_error, safe_decrement, safe_increment, spot_market::SpotMarket, state::{dex_state::{DexState, ExchangeStatus}, events::{DepositDirection, DepositExplanation, DepositRecord, NewUserAccountRecord, OrderActionExplanation, SwapRecord}, fulfillment_params::{serum::SerumFulfillmentParams, vortex::MatchFulfillmentParams}, operations::SpotOperation, oracle::StrictOraclePrice, order_params::{ModifyOrderParams, OrderParams, PlaceOrderOptions, PostOnlyParam}, position::PositionDirection, spot_fulfillment_params::SpotFulfillmentParams, spot_market::{MarketStatus, SpotBalanceType}, spot_market_map::{get_writable_spot_market_set, get_writable_spot_market_set_from_many, MarketSet}, user::{MarketType, OrderType, User}, user_map::{load_user_maps, UserMap, UserStatsMap}, user_stats::UserStats}, utils::{self, constants::{QUOTE_SPOT_MARKET_INDEX, THIRTEEN_DAY}, liquidation_utils::is_user_being_liquidated, margin_utils::{calculate_max_withdrawable_amount, meets_withdraw_margin_requirement, validate_spot_margin_trading, MarginRequirementType}, spot_market_utils::{self, get_token_value}, swap_utils::{calculate_swap_price, validate_price_bands_for_swap}, token_utils, validation_utils::validate_user_deletion}, validate};
 use crate::instructions::constraints::{fill_not_paused, exchange_not_paused , withdraw_not_paused, deposit_not_paused};
 
 use super::{account::get_token_interface, executors::SpotFulfillmentType};
@@ -1969,6 +1969,56 @@ pub fn handle_reclaim_rent(ctx: Context<ReclaimRent>) -> Result<()> {
 }
 
 
+#[access_control(
+    deposit_not_paused(&ctx.accounts.state)
+)]
+pub fn handle_deposit_into_spot_market_revenue_pool<'c: 'info, 'info>(
+    ctx: Context<'_, '_, 'c, 'info, RevenuePoolDeposit<'info>>,
+    amount: u64,
+) -> Result<()> {
+    if amount == 0 {
+        return Err(DexError::InsufficientDeposit.into());
+    }
+
+    let mut spot_market = load_mut!(ctx.accounts.spot_market)?;
+
+    let remaining_accounts_iter = &mut ctx.remaining_accounts.iter().peekable();
+
+    let mint = get_token_mint(remaining_accounts_iter)?;
+
+    validate!(
+        !spot_market.is_in_settlement(Clock::get()?.unix_timestamp),
+        DexError::DefaultError,
+        "spot market {} not active",
+        spot_market.market_index
+    )?;
+
+    controllers::spot_balance::update_revenue_pool_balances(
+        amount.cast::<u128>()?,
+        &SpotBalanceType::Deposit,
+        &mut spot_market,
+    )?;
+
+    controllers::token::receive(
+        &ctx.accounts.token_program,
+        &ctx.accounts.user_token_account,
+        &ctx.accounts.spot_market_vault,
+        &ctx.accounts.authority,
+        amount,
+        &mint,
+    )?;
+
+    spot_market.validate_max_token_deposits_and_borrows(false)?;
+    ctx.accounts.spot_market_vault.reload()?;
+    utils::spot_market_utils::validate_spot_market_vault_amount(
+        &spot_market,
+        ctx.accounts.spot_market_vault.amount,
+    )?;
+
+    Ok(())
+}
+
+
 #[derive(Accounts)]
 pub struct InitializeUserAccount<'info>{
     #[account(
@@ -2264,4 +2314,47 @@ pub struct ReclaimRent<'info> {
     pub state: Box<Account<'info, DexState>>,
     pub authority: Signer<'info>,
     pub rent: Sysvar<'info, Rent>,
+}
+
+#[derive(Accounts)]
+pub struct RevenuePoolDeposit<'info> {
+    pub state: Box<Account<'info, DexState>>,
+    #[account(mut)]
+    pub spot_market: AccountLoader<'info, SpotMarket>,
+    #[account(mut)]
+    pub authority: Signer<'info>,
+    #[account(
+        mut,
+        seeds = [b"spot_market_vault".as_ref(), spot_market.load()?.market_index.to_le_bytes().as_ref()],
+        bump,
+    )]
+    pub spot_market_vault: Box<InterfaceAccount<'info, TokenAccount>>,
+    #[account(
+        mut,
+        constraint = &spot_market_vault.mint.eq(&user_token_account.mint),
+        token::authority = authority
+    )]
+    pub user_token_account: Box<InterfaceAccount<'info, TokenAccount>>,
+    pub token_program: Interface<'info, TokenInterface>,
+}
+
+#[derive(Accounts)]
+#[instruction(params: PrelaunchOracleParams,)]
+pub struct InitializePrelaunchOracle<'info> {
+    #[account(mut)]
+    pub admin: Signer<'info>,
+    #[account(
+        init,
+        seeds = [b"prelaunch_oracle".as_ref(), params.perp_market_index.to_le_bytes().as_ref()],
+        space = PrelaunchOracle::SIZE,
+        bump,
+        payer = admin
+    )]
+    pub prelaunch_oracle: AccountLoader<'info, PrelaunchOracle>,
+    #[account(
+        has_one = admin
+    )]
+    pub state: Box<Account<'info, DexState>>,
+    pub rent: Sysvar<'info, Rent>,
+    pub system_program: Program<'info, System>,
 }

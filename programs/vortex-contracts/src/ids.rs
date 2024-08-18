@@ -11,7 +11,7 @@ pub mod wormhole_program {
     declare_id!("HDwcJBJXjL9FpJ7UBsYBtaDjsBUhuLCUYoz3zr8SWWaQ");
 }
 
-pub mod drift_oracle_receiver_program {
+pub mod vortex_oracle_program {
     use solana_program::declare_id;
     declare_id!("G6EoTTTgpkNBtVXo96EQp2m6uwwVh2Kt6YidjkmQqoha");
 }
@@ -126,5 +126,5 @@ pub mod usdt_pull_oracle {
 
 pub mod admin_hot_wallet {
     use solana_program::declare_id;
-    declare_id!("5hMjmxexWu954pX9gB9jkHxMqdjpxArQS2XdvkaevRax");
+    declare_id!("4SxWFybWqHYYpMXaf1uByp1AgBV8vi8vn7mp7yLAXsH3");
 }

@@ -3,7 +3,7 @@ use std::{collections::BTreeMap, iter::Peekable, slice::Iter};
 use anchor_lang::prelude::*;
 use arrayref::array_ref;
 
-use crate::{errors::{DexError, VortexDexResult}, ids::{bonk_oracle, bonk_pull_oracle, drift_oracle_receiver_program, pepe_oracle, pepe_pull_oracle, pyth_program, usdc_oracle, usdc_pull_oracle, usdt_oracle, usdt_pull_oracle, wen_oracle, wen_pull_oracle}, utils::oracle_utils::{oracle_validity, OracleValidity}, validate};
+use crate::{errors::{DexError, VortexDexResult}, ids::{bonk_oracle, bonk_pull_oracle, vortex_oracle_program, pepe_oracle, pepe_pull_oracle, pyth_program, usdc_oracle, usdc_pull_oracle, usdt_oracle, usdt_pull_oracle, wen_oracle, wen_pull_oracle}, utils::oracle_utils::{oracle_validity, OracleValidity}, validate};
 
 use super::{dex_state::{OracleGuardRails, ValidityGuardRails}, oracle::{get_oracle_price, OraclePriceData, OracleSource, PrelaunchOracle}, user::MarketType};
 use crate::utils::constants::PRICE_PRECISION_I64;
@@ -207,7 +207,7 @@ impl<'a> OracleMap<'a> {
                 );
 
                 continue;
-            } else if account_info.owner == &drift_oracle_receiver_program::id() {
+            } else if account_info.owner == &vortex_oracle_program::id() {
                 let account_info: &AccountInfo<'a> = account_info_iter.next().safe_unwrap()?;
                 let pubkey = account_info.key();
 
@@ -311,7 +311,7 @@ impl<'a> OracleMap<'a> {
                     oracle_source,
                 },
             );
-        } else if account_info.owner == &drift_oracle_receiver_program::id() {
+        } else if account_info.owner == &vortex_oracle_program::id() {
             let pubkey = account_info.key();
 
             let oracle_source = if PYTH_PULL_1M_IDS.contains(&pubkey) {

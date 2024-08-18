@@ -1,4 +1,4 @@
-use crate::{errors::VortexDexResult, state::{oracle::OraclePriceData, position::PositionDirection}};
+use crate::{errors::VortexDexResult, state::{oracle::OraclePriceData, position::PositionDirection}, user::Order};
 
 use super::constants::AUCTION_DERIVE_PRICE_FRACTION;
 
@@ -65,4 +65,20 @@ pub fn calculate_auction_prices(
     };
 
     Ok((oracle_price, auction_end_price))
+}
+
+
+pub fn calculate_auction_params_for_trigger_order(
+    order: &Order,
+    oracle_price_data: &OraclePriceData,
+    min_auction_duration: u8,
+) -> VortexDexResult<(u8, i64, i64)> {
+    let auction_duration = min_auction_duration;
+
+
+        let (auction_start_price, auction_end_price) =
+            calculate_auction_prices(oracle_price_data, order.direction, order.price)?;
+
+        Ok((auction_duration, auction_start_price, auction_end_price))
+    
 }

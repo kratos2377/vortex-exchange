@@ -84,7 +84,7 @@ impl Default for UserStats {
             number_of_sub_accounts: 0,
             number_of_sub_accounts_created: 0,
             is_referrer: false,
-            disable_update_perp_bid_ask_twap: false,
+            disable_update_perp_bid_ask_twap: true,
             padding1: [0; 2],
             fuel_insurance: 0,
             fuel_deposits: 0,

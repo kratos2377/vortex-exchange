@@ -2,7 +2,7 @@ use std::{cell::RefMut, collections::BTreeMap};
 
 use anchor_lang::prelude::*;
 
-use crate::{errors::{DexError, VortexDexResult}, get_struct_values, get_then_update_id, load_mut, print_error, state::{dex_state::{DexState, ExchangeStatus, FeeStructure}, events::{emit_stack, get_order_action_record, OrderAction, OrderActionExplanation, OrderActionRecord, OrderRecord}, fulfillment::SpotFulfillmentMethod, margin_calculation::{MarginCalculation, MarginContext}, operations::SpotOperation, oracle::{OraclePriceData, StrictOraclePrice}, oracle_map::OracleMap, order_params::{ModifyOrderParams, ModifyOrderPolicy, OrderParams, PlaceOrderOptions, PostOnlyParam}, position::PositionDirection, spot_fulfillment_params::{ExternalSpotFill, SpotFulfillmentParams}, spot_market::{MarketStatus, SpotBalanceType, SpotMarket}, spot_market_map::SpotMarketMap, user::{AssetType, MarketType, Order, OrderStatus, OrderTriggerCondition, OrderType, User}, user_map::{UserMap, UserStatsMap}, user_stats::UserStats}, utils::{auction_utils::calculate_auction_prices, constants::QUOTE_SPOT_MARKET_INDEX, fees_utils::{self, FillFees}, fuel_utils::ExternalFillFees, liquidation_utils::validate_user_not_being_liquidated, margin_utils::{calculate_margin_requirement_and_total_collateral_and_liability_info, meets_place_order_margin_requirement, validate_spot_margin_trading, MarginRequirementType}, matching_utils::{are_orders_same_market_but_different_sides, calculate_fill_for_matched_orders, calculate_filler_multiplier_for_matched_orders, do_orders_cross, is_maker_for_taker}, order_utils::{calculate_fill_price, calculate_max_spot_order_size, determine_spot_fulfillment_methods, find_maker_orders, get_max_fill_amounts, is_multiple_of_step_size, is_new_order_risk_increasing, is_oracle_too_divergent_with_twap_5min, limit_price_breaches_maker_oracle_price_bands, should_cancel_reduce_only_order, should_expire_order, should_expire_order_before_fill, standardize_base_asset_amount, standardize_price, standardize_price_i64, validate_fill_price, validate_fill_price_within_price_bands, validate_order_for_force_reduce_only, validate_spot_order}, spot_market_utils::{get_signed_token_amount, get_token_amount, select_margin_type_for_swap}}, validate};
+use crate::{errors::{DexError, VortexDexResult}, get_struct_values, get_then_update_id, load_mut, print_error, state::{dex_state::{DexState, ExchangeStatus, FeeStructure}, events::{emit_stack, get_order_action_record, OrderAction, OrderActionExplanation, OrderActionRecord, OrderRecord}, fulfillment::SpotFulfillmentMethod, margin_calculation::{MarginCalculation, MarginContext}, operations::SpotOperation, oracle::{OraclePriceData, StrictOraclePrice}, oracle_map::OracleMap, order_params::{ModifyOrderParams, ModifyOrderPolicy, OrderParams, PlaceOrderOptions, PostOnlyParam}, position::PositionDirection, spot_fulfillment_params::{ExternalSpotFill, SpotFulfillmentParams}, spot_market::{MarketStatus, SpotBalanceType, SpotMarket}, spot_market_map::SpotMarketMap, user::{AssetType, MarketType, Order, OrderStatus, OrderTriggerCondition, OrderType, User}, user_map::{UserMap, UserStatsMap}, user_stats::UserStats}, utils::{auction_utils::{calculate_auction_params_for_trigger_order, calculate_auction_prices}, constants::QUOTE_SPOT_MARKET_INDEX, fees_utils::{self, FillFees}, fuel_utils::ExternalFillFees, liquidation_utils::validate_user_not_being_liquidated, margin_utils::{calculate_margin_requirement_and_total_collateral_and_liability_info, meets_initial_margin_requirement, meets_place_order_margin_requirement, validate_spot_margin_trading, MarginRequirementType}, matching_utils::{are_orders_same_market_but_different_sides, calculate_fill_for_matched_orders, calculate_filler_multiplier_for_matched_orders, do_orders_cross, is_maker_for_taker}, oracle_utils::{is_oracle_valid_for_action, VortexDexAction}, order_utils::{calculate_fill_price, calculate_max_spot_order_size, determine_spot_fulfillment_methods, find_maker_orders, get_max_fill_amounts, is_multiple_of_step_size, is_new_order_risk_increasing, is_oracle_too_divergent_with_twap_5min, is_order_position_reducing, limit_price_breaches_maker_oracle_price_bands, order_satisfies_trigger_condition, should_cancel_reduce_only_order, should_expire_order, should_expire_order_before_fill, standardize_base_asset_amount, standardize_price, standardize_price_i64, validate_fill_price, validate_fill_price_within_price_bands, validate_order_for_force_reduce_only, validate_spot_order}, spot_market_utils::{get_signed_token_amount, get_token_amount, select_margin_type_for_swap}}, validate};
 
 use super::{position, spot_balance::{update_spot_balances, update_spot_market_cumulative_interest}, spot_position::{decrease_spot_open_bids_and_asks, increase_spot_open_bids_and_asks, update_spot_balances_and_cumulative_deposits}};
 
@@ -2143,7 +2143,7 @@ pub fn fulfill_spot_order_with_external_market(
     validate!(
         base_update_direction
             == taker.orders[taker_order_index].get_spot_position_update_direction(AssetType::Base),
-        ErrorCode::FailedToFillOnExternalMarket,
+        DexError::FailedToFillOnExternalMarket,
         "Fill on external spot market lead to unexpected to update direction"
     )?;
 
@@ -2161,7 +2161,7 @@ pub fn fulfill_spot_order_with_external_market(
     validate!(
         quote_update_direction
             == taker.orders[taker_order_index].get_spot_position_update_direction(AssetType::Quote),
-        ErrorCode::FailedToFillOnExternalMarket,
+        DexError::FailedToFillOnExternalMarket,
         "Fill on external market lead to unexpected to update direction"
     )?;
 
@@ -2285,6 +2285,367 @@ fn update_maker_fills_map(
     } else {
         map.insert(*maker_key, signed_fill);
     }
+
+    Ok(())
+}
+
+
+pub fn force_cancel_orders(
+    state: &DexState,
+    user_account_loader: &AccountLoader<User>,
+    spot_market_map: &SpotMarketMap,
+    oracle_map: &mut OracleMap,
+    filler: &AccountLoader<User>,
+    clock: &Clock,
+) -> VortexDexResult {
+    let now = clock.unix_timestamp;
+    let slot = clock.slot;
+
+    let filler_key = filler.key();
+    let user_key = user_account_loader.key();
+    let user = &mut load_mut!(user_account_loader)?;
+    let filler = &mut load_mut!(filler)?;
+
+    validate!(
+        !user.is_being_liquidated(),
+        DexError::UserIsBeingLiquidated
+    )?;
+
+    validate!(!user.is_bankrupt(), DexError::UserBankrupt)?;
+
+    let margin_calc = calculate_margin_requirement_and_total_collateral_and_liability_info(
+        user,
+        spot_market_map,
+        oracle_map,
+        MarginContext::standard(MarginRequirementType::Initial),
+    )?;
+
+    let meets_initial_margin_requirement = margin_calc.meets_margin_requirement();
+
+    validate!(
+        !meets_initial_margin_requirement,
+        DexError::SufficientCollateral
+    )?;
+
+    let mut total_fee = 0_u64;
+
+    for order_index in 0..user.orders.len() {
+        if user.orders[order_index].status != OrderStatus::Open {
+            continue;
+        }
+
+        let market_index = user.orders[order_index].market_index;
+        let market_type = user.orders[order_index].market_type;
+
+        let fee =  {
+      
+                let spot_market = spot_market_map.get_ref(&market_index)?;
+                let token_amount = user
+                    .get_spot_position(market_index)?
+                    .get_signed_token_amount(&spot_market)?
+                    .cast::<i64>()?;
+                let is_position_reducing = is_order_position_reducing(
+                    &user.orders[order_index].direction,
+                    user.orders[order_index].get_base_asset_amount_unfilled(Some(token_amount))?,
+                    token_amount,
+                )?;
+                if is_position_reducing {
+                    continue;
+                }
+
+                state.spot_fee_structure.flat_filler_fee
+            
+
+        };
+
+        total_fee = total_fee.safe_add(fee)?;
+
+        cancel_order(
+            order_index,
+            user,
+            &user_key,
+            spot_market_map,
+            oracle_map,
+            now,
+            slot,
+            OrderActionExplanation::InsufficientFreeCollateral,
+            Some(&filler_key),
+            fee,
+            false,
+        )?;
+    }
+
+    pay_keeper_flat_reward_for_spot(
+        user,
+        Some(filler),
+        spot_market_map.get_quote_spot_market_mut()?.deref_mut(),
+        total_fee,
+        slot,
+    )?;
+
+    user.update_last_active_slot(slot);
+
+    Ok(())
+}
+
+
+pub fn trigger_spot_order(
+    order_id: u32,
+    state: &DexState,
+    user: &AccountLoader<User>,
+    spot_market_map: &SpotMarketMap,
+    oracle_map: &mut OracleMap,
+    filler: &AccountLoader<User>,
+    clock: &Clock,
+) -> VortexDexResult {
+    let now = clock.unix_timestamp;
+    let slot = clock.slot;
+
+    let filler_key = filler.key();
+    let user_key = user.key();
+    let user = &mut load_mut!(user)?;
+
+    let order_index = user
+        .orders
+        .iter()
+        .position(|order| order.order_id == order_id)
+        .ok_or_else(print_error!(DexError::OrderDoesNotExist))?;
+
+    let (order_status, market_index, market_type) =
+        get_struct_values!(user.orders[order_index], status, market_index, market_type);
+
+    validate!(
+        order_status == OrderStatus::Open,
+        DexError::OrderNotOpen,
+        "Order not open"
+    )?;
+
+    validate!(
+        user.orders[order_index].must_be_triggered(),
+        DexError::OrderNotTriggerable,
+        "Order is not triggerable"
+    )?;
+
+    validate!(
+        !user.orders[order_index].triggered(),
+        DexError::OrderNotTriggerable,
+        "Order is already triggered"
+    )?;
+
+    validate!(
+        market_type == MarketType::Spot,
+        DexError::InvalidOrderMarketType,
+        "Order must be a spot order"
+    )?;
+
+    validate_user_not_being_liquidated(
+        user,
+        spot_market_map,
+        oracle_map,
+        state.liquidation_margin_buffer_ratio,
+    )?;
+
+    validate!(!user.is_bankrupt(), DexError::UserBankrupt)?;
+
+    let spot_market = spot_market_map.get_ref(&market_index)?;
+    let (oracle_price_data, oracle_validity) = oracle_map.get_price_data_and_validity(
+        MarketType::Spot,
+        spot_market.market_index,
+        &spot_market.oracle,
+        spot_market.historical_oracle_data.last_oracle_price_twap,
+        spot_market.get_max_confidence_interval_multiplier()?,
+    )?;
+    let strict_oracle_price = StrictOraclePrice {
+        current: oracle_price_data.price,
+        twap_5min: Some(
+            spot_market
+                .historical_oracle_data
+                .last_oracle_price_twap_5min,
+        ),
+    };
+
+    validate!(
+        is_oracle_valid_for_action(oracle_validity, Some(VortexDexAction::TriggerOrder))?,
+        DexError::InvalidOracle,
+        "OracleValidity for spot marketIndex={} invalid for TriggerOrder",
+        spot_market.market_index
+    )?;
+
+    let oracle_price = oracle_price_data.price;
+
+    let oracle_too_divergent_with_twap_5min = is_oracle_too_divergent_with_twap_5min(
+        oracle_price_data.price,
+        spot_market
+            .historical_oracle_data
+            .last_oracle_price_twap_5min,
+        state
+            .oracle_guard_rails
+            .max_oracle_twap_5min_percent_divergence()
+            .cast()?,
+    )?;
+
+    validate!(
+        !oracle_too_divergent_with_twap_5min,
+        DexError::OrderBreachesOraclePriceLimits,
+        "oracle price vs twap too divergent"
+    )?;
+
+    let can_trigger = order_satisfies_trigger_condition(
+        &user.orders[order_index],
+        oracle_price.unsigned_abs().cast()?,
+    )?;
+    validate!(can_trigger, DexError::OrderDidNotSatisfyTriggerCondition)?;
+
+    let position_index = user.get_spot_position_index(market_index)?;
+    let signed_token_amount =
+        user.spot_positions[position_index].get_signed_token_amount(&spot_market)?;
+
+    let worst_case_simulation_before = user.spot_positions[position_index]
+        .get_worst_case_fill_simulation(
+            &spot_market,
+            &strict_oracle_price,
+            Some(signed_token_amount),
+            MarginRequirementType::Initial,
+        )?;
+
+    {
+        update_trigger_order_params(
+            &mut user.orders[order_index],
+            oracle_price_data,
+            slot,
+            30,
+            None,
+        )?;
+
+        if user.orders[order_index].has_auction() {
+            user.increment_open_auctions();
+        }
+
+        let direction = user.orders[order_index].direction;
+        let base_asset_amount = user.orders[order_index].base_asset_amount;
+
+        let user_position = user.force_get_spot_position_mut(market_index)?;
+        increase_spot_open_bids_and_asks(user_position, &direction, base_asset_amount.cast()?)?;
+    }
+
+    let is_filler_taker = user_key == filler_key;
+    let mut filler = if !is_filler_taker {
+        Some(load_mut!(filler)?)
+    } else {
+        None
+    };
+
+    let mut quote_market = spot_market_map.get_quote_spot_market_mut()?;
+    let filler_reward = pay_keeper_flat_reward_for_spot(
+        user,
+        filler.as_deref_mut(),
+        &mut quote_market,
+        state.spot_fee_structure.flat_filler_fee,
+        slot,
+    )?;
+
+    let order_action_record = get_order_action_record(
+        now,
+        OrderAction::Trigger,
+        OrderActionExplanation::None,
+        market_index,
+        Some(filler_key),
+        None,
+        Some(filler_reward),
+        None,
+        None,
+        Some(filler_reward),
+        None,
+        None,
+        None,
+        None,
+        Some(user_key),
+        Some(user.orders[order_index]),
+        None,
+        None,
+        oracle_price,
+    )?;
+
+    emit!(order_action_record);
+
+    let worst_case_simulation_after = user
+        .get_spot_position(market_index)?
+        .get_worst_case_fill_simulation(
+            &spot_market,
+            &strict_oracle_price,
+            Some(signed_token_amount),
+            MarginRequirementType::Initial,
+        )?;
+
+    drop(spot_market);
+    drop(quote_market);
+
+    let is_risk_increasing =
+        worst_case_simulation_before.risk_increasing(worst_case_simulation_after);
+
+    // If order is risk increasing and user is below initial margin, cancel it
+    if is_risk_increasing && !user.orders[order_index].reduce_only {
+        let meets_initial_margin_requirement =
+            meets_initial_margin_requirement(user, spot_market_map, oracle_map)?;
+
+        if !meets_initial_margin_requirement {
+            cancel_order(
+                order_index,
+                user,
+                &user_key,
+                spot_market_map,
+                oracle_map,
+                now,
+                slot,
+                OrderActionExplanation::InsufficientFreeCollateral,
+                Some(&filler_key),
+                0,
+                false,
+            )?;
+        }
+    }
+
+    user.update_last_active_slot(slot);
+
+    Ok(())
+}
+
+//Currently perp maket is represented as a u64 
+// it will be changed later
+fn update_trigger_order_params(
+    order: &mut Order,
+    oracle_price_data: &OraclePriceData,
+    slot: u64,
+    min_auction_duration: u8,
+    perp_market: Option<u64>,
+) -> VortexDexResult {
+    order.trigger_condition = match order.trigger_condition {
+        OrderTriggerCondition::Above => OrderTriggerCondition::TriggeredAbove,
+        OrderTriggerCondition::Below => OrderTriggerCondition::TriggeredBelow,
+        _ => {
+            return Err(print_error!(ErrorCode::InvalidTriggerOrderCondition)());
+        }
+    };
+
+    order.slot = slot;
+
+    let (auction_duration, auction_start_price, auction_end_price) =
+        calculate_auction_params_for_trigger_order(
+            order,
+            oracle_price_data,
+            min_auction_duration,
+        )?;
+
+    msg!(
+        "new auction duration {} start price {} end price {}",
+        auction_duration,
+        auction_start_price,
+        auction_end_price
+    );
+
+    order.auction_duration = auction_duration;
+    order.auction_start_price = auction_start_price;
+    order.auction_end_price = auction_end_price;
 
     Ok(())
 }

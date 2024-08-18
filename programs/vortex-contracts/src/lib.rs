@@ -13,7 +13,7 @@ pub mod ids;
 pub mod safe_methods;
 pub mod casting;
 pub mod controllers;
-use crate::instructions::{user::*, admins::*};
+use crate::instructions::{user::*, admins::*, executors::*};
 use crate::state::*;
 
 
@@ -24,11 +24,12 @@ declare_id!("HkApQpEsdzdfHsedkuZvNEbmcQXfabobbb9Yf8wdz7AZ");
 pub mod vortex_contracts {
 
     use super::*;
+    use dex_state::{FeeStructure, OracleGuardRails};
     use instructions::{admins::{handle_admin_initialize, handle_initialize_spot_market, Initialize}, executors::SpotFulfillmentType};
-    use oracle::OracleSource;
+    use oracle::{OracleSource, PrelaunchOracleParams};
     use order_params::{ModifyOrderParams, OrderParams};
     use position::PositionDirection;
-    use spot_market::{AssetTier, SpotFulfillmentConfigStatus};
+    use spot_market::{AssetTier, MarketStatus, SpotFulfillmentConfigStatus};
     use user::MarketType;
 
     
@@ -329,12 +330,6 @@ pub mod vortex_contracts {
     }
 
 
-    pub fn settle_expired_market_pools_to_revenue_pool(
-        ctx: Context<SettleExpiredMarketPoolsToRevenuePool>,
-    ) -> Result<()> {
-        handle_settle_expired_market_pools_to_revenue_pool(ctx)
-    }
-
     pub fn deposit_into_spot_market_vault<'c: 'info, 'info>(
         ctx: Context<'_, '_, 'c, 'info, DepositIntoSpotMarketVault<'info>>,
         amount: u64,
@@ -347,14 +342,6 @@ pub mod vortex_contracts {
         amount: u64,
     ) -> Result<()> {
         handle_deposit_into_spot_market_revenue_pool(ctx, amount)
-    }
-
-    pub fn repeg_amm_curve(ctx: Context<RepegCurve>, new_peg_candidate: u128) -> Result<()> {
-        handle_repeg_amm_curve(ctx, new_peg_candidate)
-    }
-
-    pub fn update_k(ctx: Context<AdminUpdateK>, sqrt_k: u128) -> Result<()> {
-        handle_update_k(ctx, sqrt_k)
     }
 
 
@@ -555,26 +542,12 @@ pub mod vortex_contracts {
         handle_update_state_settlement_duration(ctx, settlement_duration)
     }
 
-    pub fn update_state_max_number_of_sub_accounts(
-        ctx: Context<AdminUpdateState>,
-        max_number_of_sub_accounts: u16,
-    ) -> Result<()> {
-        handle_update_state_max_number_of_sub_accounts(ctx, max_number_of_sub_accounts)
-    }
 
     pub fn update_state_max_initialize_user_fee(
         ctx: Context<AdminUpdateState>,
         max_initialize_user_fee: u16,
     ) -> Result<()> {
         handle_update_state_max_initialize_user_fee(ctx, max_initialize_user_fee)
-    }
-
-
-    pub fn update_amm_jit_intensity(
-        ctx: Context<AdminUpdatePerpMarket>,
-        amm_jit_intensity: u8,
-    ) -> Result<()> {
-        handle_update_amm_jit_intensity(ctx, amm_jit_intensity)
     }
 
 
@@ -647,45 +620,6 @@ pub mod vortex_contracts {
         handle_update_spot_auction_duration(ctx, default_spot_auction_duration)
     }
 
-    pub fn initialize_protocol_if_shares_transfer_config(
-        ctx: Context<InitializeProtocolIfSharesTransferConfig>,
-    ) -> Result<()> {
-        handle_initialize_protocol_if_shares_transfer_config(ctx)
-    }
-
-    pub fn update_protocol_if_shares_transfer_config(
-        ctx: Context<UpdateProtocolIfSharesTransferConfig>,
-        whitelisted_signers: Option<[Pubkey; 4]>,
-        max_transfer_per_epoch: Option<u128>,
-    ) -> Result<()> {
-        handle_update_protocol_if_shares_transfer_config(
-            ctx,
-            whitelisted_signers,
-            max_transfer_per_epoch,
-        )
-    }
-
-    pub fn initialize_prelaunch_oracle(
-        ctx: Context<InitializePrelaunchOracle>,
-        params: PrelaunchOracleParams,
-    ) -> Result<()> {
-        handle_initialize_prelaunch_oracle(ctx, params)
-    }
-
-    pub fn update_prelaunch_oracle_params(
-        ctx: Context<UpdatePrelaunchOracleParams>,
-        params: PrelaunchOracleParams,
-    ) -> Result<()> {
-        handle_update_prelaunch_oracle_params(ctx, params)
-    }
-
-    pub fn delete_prelaunch_oracle(
-        ctx: Context<DeletePrelaunchOracle>,
-        perp_market_index: u16,
-    ) -> Result<()> {
-        handle_delete_prelaunch_oracle(ctx, perp_market_index)
-    }
-
     pub fn initialize_pyth_pull_oracle(
         ctx: Context<InitPythPullPriceFeed>,
         feed_id: [u8; 32],
@@ -696,4 +630,171 @@ pub mod vortex_contracts {
     // trader bots
     // bots will be responsible for taking orders and completing them
     // will also do settlement like P&L settlement
+
+    pub fn fill_spot_order<'c: 'info, 'info>(
+        ctx: Context<'_, '_, 'c, 'info, FillOrder<'info>>,
+        order_id: Option<u32>,
+        fulfillment_type: Option<SpotFulfillmentType>,
+        maker_order_id: Option<u32>,
+    ) -> Result<()> {
+        handle_fill_spot_order(ctx, order_id, fulfillment_type, maker_order_id)
+    }
+
+    pub fn trigger_order<'c: 'info, 'info>(
+        ctx: Context<'_, '_, 'c, 'info, TriggerOrder<'info>>,
+        order_id: u32,
+    ) -> Result<()> {
+        handle_trigger_order(ctx, order_id)
+    }
+
+    pub fn force_cancel_orders<'c: 'info, 'info>(
+        ctx: Context<'_, '_, 'c, 'info, ForceCancelOrder<'info>>,
+    ) -> Result<()> {
+        handle_force_cancel_orders(ctx)
+    }
+
+    pub fn update_user_idle<'c: 'info, 'info>(
+        ctx: Context<'_, '_, 'c, 'info, UpdateUserIdle<'info>>,
+    ) -> Result<()> {
+        handle_update_user_idle(ctx)
+    }
+
+    pub fn update_user_open_orders_count(ctx: Context<UpdateUserIdle>) -> Result<()> {
+        handle_update_user_open_orders_count(ctx)
+    }
+
+
+
+    pub fn settle_pnl<'c: 'info, 'info>(
+        ctx: Context<'_, '_, 'c, 'info, SettlePNL>,
+        market_index: u16,
+    ) -> Result<()> {
+        handle_settle_pnl(ctx, market_index)
+    }
+
+    pub fn settle_multiple_pnls<'c: 'info, 'info>(
+        ctx: Context<'_, '_, 'c, 'info, SettlePNL>,
+        market_indexes: Vec<u16>,
+        mode: SettlePnlMode,
+    ) -> Result<()> {
+        handle_settle_multiple_pnls(ctx, market_indexes, mode)
+    }
+
+    pub fn settle_funding_payment<'c: 'info, 'info>(
+        ctx: Context<'_, '_, 'c, 'info, SettleFunding>,
+    ) -> Result<()> {
+        handle_settle_funding_payment(ctx)
+    }
+
+    pub fn settle_lp<'c: 'info, 'info>(
+        ctx: Context<'_, '_, 'c, 'info, SettleLP>,
+        market_index: u16,
+    ) -> Result<()> {
+        handle_settle_lp(ctx, market_index)
+    }
+
+    pub fn settle_expired_market<'c: 'info, 'info>(
+        ctx: Context<'_, '_, 'c, 'info, UpdateAMM<'info>>,
+        market_index: u16,
+    ) -> Result<()> {
+        handle_settle_expired_market(ctx, market_index)
+    }
+
+    pub fn liquidate_spot<'c: 'info, 'info>(
+        ctx: Context<'_, '_, 'c, 'info, LiquidateSpot<'info>>,
+        asset_market_index: u16,
+        liability_market_index: u16,
+        liquidator_max_liability_transfer: u128,
+        limit_price: Option<u64>, // asset/liaiblity
+    ) -> Result<()> {
+        handle_liquidate_spot(
+            ctx,
+            asset_market_index,
+            liability_market_index,
+            liquidator_max_liability_transfer,
+            limit_price,
+        )
+    }
+
+    pub fn liquidate_borrow_for_perp_pnl<'c: 'info, 'info>(
+        ctx: Context<'_, '_, 'c, 'info, LiquidateBorrowForPerpPnl<'info>>,
+        perp_market_index: u16,
+        spot_market_index: u16,
+        liquidator_max_liability_transfer: u128,
+        limit_price: Option<u64>,
+    ) -> Result<()> {
+        handle_liquidate_borrow_for_perp_pnl(
+            ctx,
+            perp_market_index,
+            spot_market_index,
+            liquidator_max_liability_transfer,
+            limit_price,
+        )
+    }
+
+    pub fn liquidate_perp_pnl_for_deposit<'c: 'info, 'info>(
+        ctx: Context<'_, '_, 'c, 'info, LiquidatePerpPnlForDeposit<'info>>,
+        perp_market_index: u16,
+        spot_market_index: u16,
+        liquidator_max_pnl_transfer: u128,
+        limit_price: Option<u64>,
+    ) -> Result<()> {
+        handle_liquidate_perp_pnl_for_deposit(
+            ctx,
+            perp_market_index,
+            spot_market_index,
+            liquidator_max_pnl_transfer,
+            limit_price,
+        )
+    }
+
+    pub fn resolve_perp_pnl_deficit<'c: 'info, 'info>(
+        ctx: Context<'_, '_, 'c, 'info, ResolvePerpPnlDeficit<'info>>,
+        spot_market_index: u16,
+        perp_market_index: u16,
+    ) -> Result<()> {
+        handle_resolve_perp_pnl_deficit(ctx, spot_market_index, perp_market_index)
+    }
+
+    pub fn resolve_spot_bankruptcy<'c: 'info, 'info>(
+        ctx: Context<'_, '_, 'c, 'info, ResolveBankruptcy<'info>>,
+        market_index: u16,
+    ) -> Result<()> {
+        handle_resolve_spot_bankruptcy(ctx, market_index)
+    }
+
+    pub fn update_funding_rate(ctx: Context<UpdateFundingRate>, market_index: u16) -> Result<()> {
+        handle_update_funding_rate(ctx, market_index)
+    }
+
+    pub fn update_prelaunch_oracle(ctx: Context<UpdatePrelaunchOracle>) -> Result<()> {
+        handle_update_prelaunch_oracle(ctx)
+    }
+
+    pub fn update_amms<'c: 'info, 'info>(
+        ctx: Context<'_, '_, 'c, 'info, UpdateAMM<'info>>,
+        market_indexes: [u16; 5],
+    ) -> Result<()> {
+        handle_update_amms(ctx, market_indexes)
+    }
+
+    pub fn update_spot_market_expiry(
+        ctx: Context<AdminUpdateSpotMarket>,
+        expiry_ts: i64,
+    ) -> Result<()> {
+        handle_update_spot_market_expiry(ctx, expiry_ts)
+    }
+
+    pub fn update_user_quote_asset_insurance_stake(
+        ctx: Context<UpdateUserQuoteAssetInsuranceStake>,
+    ) -> Result<()> {
+        handle_update_user_quote_asset_insurance_stake(ctx)
+    }
+
+    pub fn update_user_gov_token_insurance_stake(
+        ctx: Context<UpdateUserGovTokenInsuranceStake>,
+    ) -> Result<()> {
+        handle_update_user_gov_token_insurance_stake(ctx)
+    }
+
 }
