@@ -13,7 +13,7 @@ pub mod ids;
 pub mod safe_methods;
 pub mod casting;
 pub mod controllers;
-use crate::instructions::{user::*, admins::*, executors::*};
+use crate::instructions::{user::*, admins::*, executors::*, game_stake::*};
 use crate::state::*;
 
 
@@ -25,6 +25,7 @@ pub mod vortex_contracts {
 
     use super::*;
     use dex_state::{FeeStructure, OracleGuardRails};
+    use game_stake::BetType;
     use instructions::{admins::{handle_admin_initialize, handle_initialize_spot_market, Initialize}, executors::SpotFulfillmentType};
     use oracle::{OracleSource, PrelaunchOracleParams};
     use order_params::{ModifyOrderParams, OrderParams};
@@ -692,6 +693,65 @@ pub mod vortex_contracts {
     ) -> Result<()> {
         handle_update_spot_market_expiry(ctx, expiry_ts)
     }
+
+    // Game Stake fns
+    pub fn initialize_game(
+        ctx: Context<InitGame>,
+        game_id: [u8; 16],
+        total_money_staked: f64,
+    
+    ) -> Result<()> {
+        handle_init_game(ctx, game_id, total_money_staked)
+    }
+
+
+    pub fn initialize_player_bet(
+        ctx: Context<InitPlayerBet>,
+        game_id: [u8; 16],
+        total_money_staked: f64,
+        user_betting_on_id: [u8;16]
+    
+    ) -> Result<()> {
+        handle_init_player_bet(ctx, game_id, total_money_staked, user_betting_on_id)
+    }
+
+
+    
+    pub fn handle_user_bet(
+        ctx: Context<MakeUserGameBet>,
+        game_id: [u8; 16],
+        user_betting_on_id: [u8;16],
+        money_staked: f64,
+        bet_type: BetType
+    
+    ) -> Result<()> {
+        handle_user_bet(ctx, game_id, user_betting_on_id, money_staked, bet_type)
+    }
+
+
+        
+    pub fn update_User_bet(
+        ctx: Context<UpdateUserGameBet>,
+        bet_type: BetType,
+        game_id: [u8;16],
+        user_betting_on_id: [u8;16],
+        money_staked: f64,
+    
+    ) -> Result<()> {
+        handle_update_bet(ctx, bet_type,  game_id, user_betting_on_id, money_staked)
+    }
+
+    pub fn settle_all_bets(
+        ctx: Context<SettleAllBetsForGame>,
+        bet_type: BetType,
+        game_id: [u8;16],
+        user_betting_on_id: [u8;16],
+        winner_id: [u8;16],
+    
+    ) -> Result<()> {
+        handle_settle_all_bets_for_game(ctx, bet_type,  game_id, user_betting_on_id, winner_id)
+    }
+
 
 
 }
