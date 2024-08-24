@@ -180,7 +180,7 @@ impl<'a, 'b> SerumContext<'a, 'b> {
 }
 
 pub struct SerumFulfillmentParams<'a, 'b> {
-    pub drift_signer: &'a AccountInfo<'b>,
+    pub vortex_signer: &'a AccountInfo<'b>,
     pub serum_context: SerumContext<'a, 'b>,
     pub serum_request_queue: &'a AccountInfo<'b>,
     pub serum_event_queue: &'a AccountInfo<'b>,
@@ -218,7 +218,7 @@ impl<'a, 'b> SerumFulfillmentParams<'a, 'b> {
     ) -> VortexDexResult<Self> {
         let account_info_vec = account_info_iter.collect::<Vec<_>>();
         let account_infos = array_ref![account_info_vec, 0, 16];
-        let [serum_fulfillment_config, serum_program, serum_market, serum_request_queue, serum_event_queue, serum_bids, serum_asks, serum_base_vault, serum_quote_vault, serum_open_orders, serum_signer, drift_signer, token_program, base_market_vault, quote_market_vault, srm_vault] =
+        let [serum_fulfillment_config, serum_program, serum_market, serum_request_queue, serum_event_queue, serum_bids, serum_asks, serum_base_vault, serum_quote_vault, serum_open_orders, serum_signer, vortex_signer, token_program, base_market_vault, quote_market_vault, srm_vault] =
             account_infos;
 
         let serum_fulfillment_config_loader: AccountLoader<SerumV3FulfillmentConfig> =
@@ -234,7 +234,7 @@ impl<'a, 'b> SerumFulfillmentParams<'a, 'b> {
         )?;
 
         validate!(
-            &state.signer == drift_signer.key,
+            &state.signer == vortex_signer.key,
             ErrorCode::InvalidFulfillmentConfig
         )?;
 
@@ -293,7 +293,7 @@ impl<'a, 'b> SerumFulfillmentParams<'a, 'b> {
         )?;
 
         Ok(SerumFulfillmentParams {
-            drift_signer,
+            vortex_signer,
             serum_context: SerumContext {
                 serum_program,
                 serum_market,
@@ -324,7 +324,7 @@ impl<'a, 'b> SerumFulfillmentParams<'a, 'b> {
         taker_direction: PositionDirection,
         order: NewOrderInstructionV3,
     ) -> VortexDexResult {
-        let drift_vault = match taker_direction {
+        let vortex_vault = match taker_direction {
             PositionDirection::Long => self.quote_market_vault.to_account_info(),
             PositionDirection::Short => self.base_market_vault.to_account_info(),
         };
@@ -340,12 +340,12 @@ impl<'a, 'b> SerumFulfillmentParams<'a, 'b> {
                 AccountMeta::new(*self.serum_event_queue.key, false),
                 AccountMeta::new(*self.serum_bids.key, false),
                 AccountMeta::new(*self.serum_asks.key, false),
-                AccountMeta::new(*drift_vault.key, false),
-                AccountMeta::new_readonly(*self.drift_signer.key, true),
+                AccountMeta::new(*vortex_vault.key, false),
+                AccountMeta::new_readonly(*self.vortex_signer.key, true),
                 AccountMeta::new(*self.serum_base_vault.key, false),
                 AccountMeta::new(*self.serum_quote_vault.key, false),
                 AccountMeta::new_readonly(*self.token_program.key, false),
-                AccountMeta::new_readonly(*self.drift_signer.key, false),
+                AccountMeta::new_readonly(*self.vortex_signer.key, false),
             ],
         };
 
@@ -362,8 +362,8 @@ impl<'a, 'b> SerumFulfillmentParams<'a, 'b> {
                 self.serum_event_queue.clone(),
                 self.serum_bids.clone(),
                 self.serum_asks.clone(),
-                drift_vault.clone(),
-                self.drift_signer.clone(),
+                vortex_vault.clone(),
+                self.vortex_signer.clone(),
                 self.serum_base_vault.clone(),
                 self.serum_quote_vault.clone(),
                 self.token_program.to_account_info(),
@@ -391,8 +391,8 @@ impl<'a, 'b> SerumFulfillmentParams<'a, 'b> {
                 self.serum_event_queue.clone(),
                 self.serum_bids.clone(),
                 self.serum_asks.clone(),
-                drift_vault.clone(),
-                self.drift_signer.clone(),
+                vortex_vault.clone(),
+                self.vortex_signer.clone(),
                 self.serum_base_vault.clone(),
                 self.serum_quote_vault.clone(),
                 self.token_program.to_account_info(),
@@ -421,7 +421,7 @@ impl<'a, 'b> SerumFulfillmentParams<'a, 'b> {
             accounts: vec![
                 AccountMeta::new(*self.serum_market.key, false),
                 AccountMeta::new(*self.serum_open_orders.key, false),
-                AccountMeta::new_readonly(*self.drift_signer.key, true),
+                AccountMeta::new_readonly(*self.vortex_signer.key, true),
                 AccountMeta::new(*self.serum_base_vault.key, false),
                 AccountMeta::new(*self.serum_quote_vault.key, false),
                 AccountMeta::new(self.base_market_vault.key(), false),
@@ -436,7 +436,7 @@ impl<'a, 'b> SerumFulfillmentParams<'a, 'b> {
             self.serum_program.clone(),
             self.serum_market.clone(),
             self.serum_open_orders.clone(),
-            self.drift_signer.clone(),
+            self.vortex_signer.clone(),
             self.serum_base_vault.clone(),
             self.serum_quote_vault.clone(),
             self.base_market_vault.to_account_info(),

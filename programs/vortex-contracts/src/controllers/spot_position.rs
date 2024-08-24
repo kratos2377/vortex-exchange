@@ -53,7 +53,7 @@ pub fn update_spot_balances_and_cumulative_deposits(
     update_direction: &SpotBalanceType,
     spot_market: &mut SpotMarket,
     spot_position: &mut SpotPosition,
-    is_leaving_drift: bool,
+    is_leaving_vortex: bool,
     cumulative_deposit_delta: Option<u128>,
 ) -> VortexDexResult {
     update_spot_balances(
@@ -61,7 +61,7 @@ pub fn update_spot_balances_and_cumulative_deposits(
         update_direction,
         spot_market,
         spot_position,
-        is_leaving_drift,
+        is_leaving_vortex,
     )?;
 
     let cumulative_deposit_delta = cumulative_deposit_delta.unwrap_or(token_amount);

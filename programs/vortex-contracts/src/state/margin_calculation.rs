@@ -240,13 +240,13 @@ impl MarginCalculation {
         Ok(())
     }
 
-    #[cfg(feature = "drift-rs")]
+    #[cfg(feature = "vortex-rs")]
     pub fn add_spot_asset_value(&mut self, spot_asset_value: i128) -> VortexDexResult {
         self.total_spot_asset_value = self.total_spot_asset_value.safe_add(spot_asset_value)?;
         Ok(())
     }
 
-    #[cfg(feature = "drift-rs")]
+    #[cfg(feature = "vortex-rs")]
     pub fn add_spot_liability_value(&mut self, spot_liability_value: u128) -> VortexDexResult {
         self.total_spot_liability_value = self
             .total_spot_liability_value
@@ -254,7 +254,7 @@ impl MarginCalculation {
         Ok(())
     }
 
-    #[cfg(feature = "drift-rs")]
+    #[cfg(feature = "vortex-rs")]
     pub fn add_perp_liability_value(&mut self, perp_liability_value: u128) -> VortexDexResult {
         self.total_perp_liability_value = self
             .total_perp_liability_value
@@ -262,7 +262,7 @@ impl MarginCalculation {
         Ok(())
     }
 
-    #[cfg(feature = "drift-rs")]
+    #[cfg(feature = "vortex-rs")]
     pub fn add_perp_pnl(&mut self, perp_pnl: i128) -> VortexDexResult {
         self.total_perp_pnl = self.total_perp_pnl.safe_add(perp_pnl)?;
         Ok(())

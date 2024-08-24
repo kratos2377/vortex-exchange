@@ -432,7 +432,7 @@ pub fn handle_withdraw<'c: 'info, 'info>(
         &ctx.accounts.token_program,
         &ctx.accounts.spot_market_vault,
         &ctx.accounts.user_token_account,
-        &ctx.accounts.drift_signer,
+        &ctx.accounts.vortex_signer,
         state.signer_nonce,
         amount,
         &mint,
@@ -1314,7 +1314,7 @@ pub fn handle_begin_swap<'c: 'info, 'info>(
         &ctx.accounts.token_program,
         in_vault,
         &ctx.accounts.in_token_account,
-        &ctx.accounts.drift_signer,
+        &ctx.accounts.vortex_signer,
         state.signer_nonce,
         amount_in,
         &mint,
@@ -1330,7 +1330,7 @@ pub fn handle_begin_swap<'c: 'info, 'info>(
         "SwapBegin must be a top-level instruction (cant be cpi)"
     )?;
 
-    // The only other drift program allowed is SwapEnd
+    // The only other vortex program allowed is SwapEnd
     let mut index = current_index + 1;
     let mut found_end = false;
     loop {
@@ -1340,13 +1340,13 @@ pub fn handle_begin_swap<'c: 'info, 'info>(
             Err(e) => return Err(e.into()),
         };
 
-        // Check that the drift program key is not used
+        // Check that the vortex program key is not used
         if ix.program_id == crate::id() {
             // must be the last ix -- this could possibly be relaxed
             validate!(
                 !found_end,
                 DexError::InvalidSwap,
-                "the transaction must not contain a Drift instruction after FlashLoanEnd"
+                "the transaction must not contain a vortex instruction after FlashLoanEnd"
             )?;
             found_end = true;
 
@@ -1355,7 +1355,7 @@ pub fn handle_begin_swap<'c: 'info, 'info>(
             validate!(
                 ix.data[0..8] == discriminator,
                 DexError::InvalidSwap,
-                "last drift ix must be end of swap"
+                "last vortex ix must be end of swap"
             )?;
 
             validate!(
@@ -1431,7 +1431,7 @@ pub fn handle_begin_swap<'c: 'info, 'info>(
                 validate!(
                     meta.pubkey != crate::id(),
                     DexError::InvalidSwap,
-                    "instructions between begin and end must not be drift instructions"
+                    "instructions between begin and end must not be vortex instructions"
                 )?;
             }
         }
@@ -2115,10 +2115,10 @@ pub struct Withdraw<'info> {
     )]
     pub spot_market_vault: Box<InterfaceAccount<'info, TokenAccount>>,
     #[account(
-        constraint = state.signer.eq(&drift_signer.key())
+        constraint = state.signer.eq(&vortex_signer.key())
     )]
-    /// CHECK: forced drift_signer
-    pub drift_signer: AccountInfo<'info>,
+    /// CHECK: forced vortex_signer
+    pub vortex_signer: AccountInfo<'info>,
     #[account(
         mut,
         constraint = &spot_market_vault.mint.eq(&user_token_account.mint)
@@ -2257,10 +2257,10 @@ pub struct Swap<'info> {
     pub in_token_account: Box<InterfaceAccount<'info, TokenAccount>>,
     pub token_program: Interface<'info, TokenInterface>,
     #[account(
-        constraint = state.signer.eq(&drift_signer.key())
+        constraint = state.signer.eq(&vortex_signer.key())
     )]
-    /// CHECK: forced drift_signer
-    pub drift_signer: AccountInfo<'info>,
+    /// CHECK: forced vortex_signer
+    pub vortex_signer: AccountInfo<'info>,
     /// Instructions Sysvar for instruction introspection
     /// CHECK: fixed instructions sysvar account
     #[account(address = instructions::ID)]
@@ -2268,13 +2268,10 @@ pub struct Swap<'info> {
 }
 
 #[derive(Accounts)]
-#[instruction(
-    sub_account_id: u16,
-)]
 pub struct UpdateUser<'info> {
     #[account(
         mut,
-        seeds = [b"user", authority.key.as_ref(), sub_account_id.to_le_bytes().as_ref()],
+        seeds = [b"user", authority.key.as_ref()],
         bump,
     )]
     pub user: AccountLoader<'info, User>,

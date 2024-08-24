@@ -526,7 +526,7 @@ pub fn validate_spot_market_vault_amount(
 pub fn get_max_withdraw_for_market_with_token_amount(
     spot_market: &SpotMarket,
     token_amount: i128,
-    is_leaving_drift: bool,
+    is_leaving_vortex: bool,
 ) -> VortexDexResult<u128> {
     let deposit_token_amount = get_token_amount(
         spot_market.deposit_balance,
@@ -540,8 +540,8 @@ pub fn get_max_withdraw_for_market_with_token_amount(
         &SpotBalanceType::Borrow,
     )?;
 
-    // if leaving drift, need to consider utilization limits
-    let (min_deposit_token_for_utilization, max_borrow_token_for_utilization) = if is_leaving_drift
+    // if leaving vortex, need to consider utilization limits
+    let (min_deposit_token_for_utilization, max_borrow_token_for_utilization) = if is_leaving_vortex
     {
         calculate_token_utilization_limits(deposit_token_amount, borrow_token_amount, spot_market)?
     } else {
@@ -558,7 +558,7 @@ pub fn get_max_withdraw_for_market_with_token_amount(
         let withdraw_limit = deposit_token_amount.saturating_sub(min_deposit_token);
 
         let token_amount = token_amount.unsigned_abs();
-        if withdraw_limit <= token_amount && is_leaving_drift {
+        if withdraw_limit <= token_amount && is_leaving_vortex {
             return Ok(withdraw_limit);
         }
 

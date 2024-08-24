@@ -5,3 +5,4 @@ pub mod orders;
 pub mod position;
 pub mod pda;
 pub mod liquidation;
+pub mod game_stake;

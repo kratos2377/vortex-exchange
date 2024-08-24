@@ -3,7 +3,7 @@ use std::{convert::identity, mem::size_of};
 use anchor_lang::prelude::*;
 use anchor_spl::{token::Token, token_2022::Token2022, token_interface::{Mint, TokenAccount, TokenInterface}};
 use pyth_solana_receiver_sdk::{cpi::accounts::InitPriceUpdate, program::PythSolanaReceiver};
-use serum_dex::error::DexError;
+use crate::errors::DexError;
 use crate::{ids::admin_hot_wallet, instructions::{account::get_token_mint, constraints::{deposit_not_paused , spot_market_valid}}, oracle::OraclePriceData, user::User, user_stats::UserStats, utils::{constants::{FUEL_START_TS, IF_FACTOR_PRECISION, LIQUIDATION_FEE_PRECISION, PERCENTAGE_PRECISION}, fees_utils::validate_fee_structure, spot_market_utils::validate_spot_market_vault_amount}};
 use crate::{controllers::{self, token::close_vault}, dex_state::{DexState, ExchangeStatus, FeeStructure, OracleGuardRails}, events::SpotMarketVaultDepositRecord, fulfillment_params::serum::{SerumContext, SerumV3FulfillmentConfig}, get_then_update_id, load, load_mut, operations::SpotOperation, oracle::{get_oracle_price, HistoricalIndexData, HistoricalOracleData, OracleSource}, oracle_map::OracleMap, safe_decrement, spot_market::{AssetTier, MarketStatus, PoolBalance, SpotBalanceType, SpotFulfillmentConfigStatus, SpotMarket}, utils::{constants::{DEFAULT_LIQUIDATION_MARGIN_BUFFER_RATIO, QUOTE_SPOT_MARKET_INDEX, SPOT_BALANCE_PRECISION, SPOT_CUMULATIVE_INTEREST_PRECISION, TWENTY_FOUR_HOUR}, spot_market_utils::get_token_amount, validation_utils::{validate_borrow_rate, validate_margin_weights}}, validate};
 
@@ -12,8 +12,8 @@ use super::pyth_oracle::PTYH_PRICE_FEED_SEED_PREFIX;
 
 
 pub fn handle_admin_initialize(ctx: Context<Initialize>) -> Result<()> {
-    let (drift_signer, drift_signer_nonce) =
-        Pubkey::find_program_address(&[b"drift_signer".as_ref()], ctx.program_id);
+    let (vortex_signer, vortex_signer_nonce) =
+        Pubkey::find_program_address(&[b"vortex_signer".as_ref()], ctx.program_id);
 
     **ctx.accounts.state = DexState {
         admin: *ctx.accounts.admin.key,
@@ -29,8 +29,8 @@ pub fn handle_admin_initialize(ctx: Context<Initialize>) -> Result<()> {
         default_spot_auction_duration: 10,
         liquidation_margin_buffer_ratio: DEFAULT_LIQUIDATION_MARGIN_BUFFER_RATIO,
         settlement_duration: 0, // extra duration after market expiry to allow settlement
-        signer: drift_signer,
-        signer_nonce: drift_signer_nonce,
+        signer: vortex_signer,
+        signer_nonce: vortex_signer_nonce,
         srm_vault: Pubkey::default(),
         perp_fee_structure: FeeStructure::perps_default(),
         spot_fee_structure: FeeStructure::spot_default(),
@@ -263,7 +263,7 @@ pub struct Initialize<'info> {
     pub admin: Signer<'info>,
     #[account(
         init,
-        seeds = [b"drift_state".as_ref()],
+        seeds = [b"vortex_state".as_ref()],
         space = DexState::SIZE,
         bump,
         payer = admin
@@ -271,7 +271,7 @@ pub struct Initialize<'info> {
     pub state: Box<Account<'info, DexState>>,
     pub quote_asset_mint: Box<InterfaceAccount<'info, Mint>>,
     /// CHECK: checked in `initialize`
-    pub drift_signer: AccountInfo<'info>,
+    pub vortex_signer: AccountInfo<'info>,
     pub rent: Sysvar<'info, Rent>,
     pub system_program: Program<'info, System>,
     pub token_program: Interface<'info, TokenInterface>,
@@ -294,7 +294,7 @@ pub struct InitializeSpotMarket<'info> {
         bump,
         payer = admin,
         token::mint = spot_market_mint,
-        token::authority = drift_signer
+        token::authority = vortex_signer
     )]
     pub spot_market_vault: Box<InterfaceAccount<'info, TokenAccount>>,
     #[account(
@@ -303,14 +303,14 @@ pub struct InitializeSpotMarket<'info> {
         bump,
         payer = admin,
         token::mint = spot_market_mint,
-        token::authority = drift_signer
+        token::authority = vortex_signer
     )]
     pub insurance_fund_vault: Box<InterfaceAccount<'info, TokenAccount>>,
     #[account(
-        constraint = state.signer.eq(&drift_signer.key())
+        constraint = state.signer.eq(&vortex_signer.key())
     )]
     /// CHECK: program signer
-    pub drift_signer: AccountInfo<'info>,
+    pub vortex_signer: AccountInfo<'info>,
     #[account(
         mut,
         has_one = admin
@@ -383,7 +383,7 @@ pub fn handle_delete_initialized_spot_market(
         &ctx.accounts.token_program,
         &ctx.accounts.spot_market_vault,
         &ctx.accounts.admin.to_account_info(),
-        &ctx.accounts.drift_signer,
+        &ctx.accounts.vortex_signer,
         state.signer_nonce,
     )?;
 
@@ -398,7 +398,7 @@ pub fn handle_delete_initialized_spot_market(
         &ctx.accounts.token_program,
         &ctx.accounts.insurance_fund_vault,
         &ctx.accounts.admin.to_account_info(),
-        &ctx.accounts.drift_signer,
+        &ctx.accounts.vortex_signer,
         state.signer_nonce,
     )?;
 
@@ -500,7 +500,7 @@ pub fn handle_initialize_serum_fulfillment_config(
     drop(open_orders);
 
     serum_context.invoke_init_open_orders(
-        &ctx.accounts.drift_signer,
+        &ctx.accounts.vortex_signer,
         &ctx.accounts.rent,
         ctx.accounts.state.signer_nonce,
     )?;
@@ -570,7 +570,7 @@ pub struct DeleteInitializedSpotMarket<'info> {
     )]
     pub insurance_fund_vault: Box<InterfaceAccount<'info, TokenAccount>>,
     /// CHECK: program signer
-    pub drift_signer: AccountInfo<'info>,
+    pub vortex_signer: AccountInfo<'info>,
     pub token_program: Interface<'info, TokenInterface>,
 }
 
@@ -1605,10 +1605,10 @@ pub struct InitializeSerumFulfillmentConfig<'info> {
     /// CHECK: checked in ix
     pub serum_open_orders: AccountInfo<'info>,
     #[account(
-        constraint = state.signer.eq(&drift_signer.key())
+        constraint = state.signer.eq(&vortex_signer.key())
     )]
     /// CHECK: program signer
-    pub drift_signer: AccountInfo<'info>,
+    pub vortex_signer: AccountInfo<'info>,
     #[account(
         init,
         seeds = [b"serum_fulfillment_config".as_ref(), serum_market.key.as_ref()],

@@ -553,7 +553,7 @@ pub enum DexError {
     OracleDeserializeMessageFailed,
     #[msg("Wrong guardian set owner in update price atomic")]
     OracleWrongGuardianSetOwner,
-    #[msg("Oracle post update atomic price feed account must be drift program")]
+    #[msg("Oracle post update atomic price feed account must be vortex program")]
     OracleWrongWriteAuthority,
     #[msg("Oracle vaa owner must be wormhole program")]
     OracleWrongVaaOwner,
@@ -573,6 +573,12 @@ pub enum DexError {
     NonZeroTransferFee,
     #[msg("Liquidation order failed to fill")]
     LiquidationOrderFailedToFill,
+    #[msg("Already Made a Bet on the game")]
+    AlreadyMadeABetOnGame,
+    #[msg("Bet Type cannot be changed")]
+    UserHasDifferentBetType,
+    #[msg("You lost the bet. No amount will be rewarded")]
+    UserLostTheBet,
 }
 
 #[macro_export]

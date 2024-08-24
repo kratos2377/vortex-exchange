@@ -439,7 +439,7 @@ pub fn handle_resolve_spot_bankruptcy<'c: 'info, 'info>(
             &ctx.accounts.token_program,
             &ctx.accounts.insurance_fund_vault,
             &ctx.accounts.spot_market_vault,
-            &ctx.accounts.drift_signer,
+            &ctx.accounts.vortex_signer,
             ctx.accounts.state.signer_nonce,
             pay_from_insurance,
             &mint,
@@ -588,9 +588,9 @@ pub struct ResolveBankruptcy<'info> {
     )]
     pub insurance_fund_vault: Box<InterfaceAccount<'info, TokenAccount>>,
     #[account(
-        constraint = state.signer.eq(&drift_signer.key())
+        constraint = state.signer.eq(&vortex_signer.key())
     )]
-    /// CHECK: forced drift_signer
-    pub drift_signer: AccountInfo<'info>,
+    /// CHECK: forced vortex_signer
+    pub vortex_signer: AccountInfo<'info>,
     pub token_program: Interface<'info, TokenInterface>,
 }
