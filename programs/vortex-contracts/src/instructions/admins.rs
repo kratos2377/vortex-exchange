@@ -2,7 +2,6 @@ use std::{convert::identity, mem::size_of};
 
 use anchor_lang::prelude::*;
 use anchor_spl::{token::Token, token_2022::Token2022, token_interface::{Mint, TokenAccount, TokenInterface}};
-use pyth_solana_receiver_sdk::{cpi::accounts::InitPriceUpdate, program::PythSolanaReceiver};
 use crate::errors::DexError;
 use crate::{ids::admin_hot_wallet, instructions::{account::get_token_mint, constraints::{deposit_not_paused , spot_market_valid}}, oracle::OraclePriceData, user::User, user_stats::UserStats, utils::{constants::{FUEL_START_TS, IF_FACTOR_PRECISION, LIQUIDATION_FEE_PRECISION, PERCENTAGE_PRECISION}, fees_utils::validate_fee_structure, spot_market_utils::validate_spot_market_vault_amount}};
 use crate::{controllers::{self, token::close_vault}, dex_state::{DexState, ExchangeStatus, FeeStructure, OracleGuardRails}, events::SpotMarketVaultDepositRecord, fulfillment_params::serum::{SerumContext, SerumV3FulfillmentConfig}, get_then_update_id, load, load_mut, operations::SpotOperation, oracle::{get_oracle_price, HistoricalIndexData, HistoricalOracleData, OracleSource}, oracle_map::OracleMap, safe_decrement, spot_market::{AssetTier, MarketStatus, PoolBalance, SpotBalanceType, SpotFulfillmentConfigStatus, SpotMarket}, utils::{constants::{DEFAULT_LIQUIDATION_MARGIN_BUFFER_RATIO, QUOTE_SPOT_MARKET_INDEX, SPOT_BALANCE_PRECISION, SPOT_CUMULATIVE_INTEREST_PRECISION, TWENTY_FOUR_HOUR}, spot_market_utils::get_token_amount, validation_utils::{validate_borrow_rate, validate_margin_weights}}, validate};
@@ -1549,30 +1548,30 @@ pub fn handle_update_spot_auction_duration(
     Ok(())
 }
 
-pub fn handle_initialize_pyth_pull_oracle(
-    ctx: Context<InitPythPullPriceFeed>,
-    feed_id: [u8; 32],
-) -> Result<()> {
-    let cpi_program = ctx.accounts.pyth_solana_receiver.to_account_info().clone();
-    let cpi_accounts = InitPriceUpdate {
-        payer: ctx.accounts.admin.to_account_info().clone(),
-        price_update_account: ctx.accounts.price_feed.to_account_info().clone(),
-        system_program: ctx.accounts.system_program.to_account_info().clone(),
-        write_authority: ctx.accounts.price_feed.to_account_info().clone(),
-    };
+// pub fn handle_initialize_pyth_pull_oracle(
+//     ctx: Context<InitPythPullPriceFeed>,
+//     feed_id: [u8; 32],
+// ) -> Result<()> {
+//     let cpi_program = ctx.accounts.pyth_solana_receiver.to_account_info().clone();
+//     let cpi_accounts = InitPriceUpdate {
+//         payer: ctx.accounts.admin.to_account_info().clone(),
+//         price_update_account: ctx.accounts.price_feed.to_account_info().clone(),
+//         system_program: ctx.accounts.system_program.to_account_info().clone(),
+//         write_authority: ctx.accounts.price_feed.to_account_info().clone(),
+//     };
 
-    let seeds = &[
-        PTYH_PRICE_FEED_SEED_PREFIX,
-        feed_id.as_ref(),
-        &[ctx.bumps.price_feed],
-    ];
-    let signer_seeds = &[&seeds[..]];
-    let cpi_context = CpiContext::new_with_signer(cpi_program, cpi_accounts, signer_seeds);
+//     let seeds = &[
+//         PTYH_PRICE_FEED_SEED_PREFIX,
+//         feed_id.as_ref(),
+//         &[ctx.bumps.price_feed],
+//     ];
+//     let signer_seeds = &[&seeds[..]];
+//     let cpi_context = CpiContext::new_with_signer(cpi_program, cpi_accounts, signer_seeds);
 
-    pyth_solana_receiver_sdk::cpi::init_price_update(cpi_context, feed_id)?;
+//     pyth_solana_receiver_sdk::cpi::init_price_update(cpi_context, feed_id)?;
 
-    Ok(())
-}
+//     Ok(())
+// }
 
 
 #[derive(Accounts)]
@@ -1719,18 +1718,18 @@ pub struct AdminUpdateState<'info> {
 }
 
 
-#[derive(Accounts)]
-#[instruction(feed_id : [u8; 32])]
-pub struct InitPythPullPriceFeed<'info> {
-    #[account(mut)]
-    pub admin: Signer<'info>,
-    pub pyth_solana_receiver: Program<'info, PythSolanaReceiver>,
-    /// CHECK: This account's seeds are checked
-    #[account(mut, seeds = [PTYH_PRICE_FEED_SEED_PREFIX, &feed_id], bump)]
-    pub price_feed: AccountInfo<'info>,
-    pub system_program: Program<'info, System>,
-    #[account(
-        has_one = admin
-    )]
-    pub state: Box<Account<'info, DexState>>,
-}
+// #[derive(Accounts)]
+// #[instruction(feed_id : [u8; 32])]
+// pub struct InitPythPullPriceFeed<'info> {
+//     #[account(mut)]
+//     pub admin: Signer<'info>,
+//     pub pyth_solana_receiver: Program<'info, PythSolanaReceiver>,
+//     /// CHECK: This account's seeds are checked
+//     #[account(mut, seeds = [PTYH_PRICE_FEED_SEED_PREFIX, &feed_id], bump)]
+//     pub price_feed: AccountInfo<'info>,
+//     pub system_program: Program<'info, System>,
+//     #[account(
+//         has_one = admin
+//     )]
+//     pub state: Box<Account<'info, DexState>>,
+// }

@@ -621,12 +621,12 @@ pub mod vortex_contracts {
         handle_update_spot_auction_duration(ctx, default_spot_auction_duration)
     }
 
-    pub fn initialize_pyth_pull_oracle(
-        ctx: Context<InitPythPullPriceFeed>,
-        feed_id: [u8; 32],
-    ) -> Result<()> {
-        handle_initialize_pyth_pull_oracle(ctx, feed_id)
-    }
+    // pub fn initialize_pyth_pull_oracle(
+    //     ctx: Context<InitPythPullPriceFeed>,
+    //     feed_id: [u8; 32],
+    // ) -> Result<()> {
+    //     handle_initialize_pyth_pull_oracle(ctx, feed_id)
+    // }
 
     // trader bots
     // bots will be responsible for taking orders and completing them
