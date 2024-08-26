@@ -7,7 +7,7 @@ use crate::errors::DexError;
 use crate::{ids::admin_hot_wallet, instructions::{account::get_token_mint, constraints::{deposit_not_paused , spot_market_valid}}, oracle::OraclePriceData, user::User, user_stats::UserStats, utils::{constants::{FUEL_START_TS, IF_FACTOR_PRECISION, LIQUIDATION_FEE_PRECISION, PERCENTAGE_PRECISION}, fees_utils::validate_fee_structure, spot_market_utils::validate_spot_market_vault_amount}};
 use crate::{controllers::{self, token::close_vault}, dex_state::{DexState, ExchangeStatus, FeeStructure, OracleGuardRails}, events::SpotMarketVaultDepositRecord, fulfillment_params::serum::{SerumContext, SerumV3FulfillmentConfig}, get_then_update_id, load, load_mut, operations::SpotOperation, oracle::{get_oracle_price, HistoricalIndexData, HistoricalOracleData, OracleSource}, oracle_map::OracleMap, safe_decrement, spot_market::{AssetTier, MarketStatus, PoolBalance, SpotBalanceType, SpotFulfillmentConfigStatus, SpotMarket}, utils::{constants::{DEFAULT_LIQUIDATION_MARGIN_BUFFER_RATIO, QUOTE_SPOT_MARKET_INDEX, SPOT_BALANCE_PRECISION, SPOT_CUMULATIVE_INTEREST_PRECISION, TWENTY_FOUR_HOUR}, spot_market_utils::get_token_amount, validation_utils::{validate_borrow_rate, validate_margin_weights}}, validate};
 
-use super::pyth_oracle::PTYH_PRICE_FEED_SEED_PREFIX;
+pub const PTYH_PRICE_FEED_SEED_PREFIX: &[u8] = b"pyth_pull";
 
 
 
