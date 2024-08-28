@@ -596,7 +596,7 @@ macro_rules! print_error {
 macro_rules! math_error {
     () => {{
         || {
-            let error_code = $crate::error::DexError::MathError;
+            let error_code = $crate::errors::DexError::MathError;
             msg!("Error {} thrown at {}:{}", error_code, file!(), line!());
             error_code
         }

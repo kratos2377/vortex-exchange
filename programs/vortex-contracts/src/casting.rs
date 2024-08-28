@@ -1,7 +1,7 @@
-use std::panic::Location;
 use solana_program::msg;
 use crate::errors::{DexError, VortexDexResult};
-
+use std::convert::TryInto;
+use std::panic::Location;
 
 
 pub trait Cast: Sized {
@@ -24,7 +24,7 @@ pub trait Cast: Sized {
 }
 
 // impl Cast for U192 {}
-// impl Cast for u128 {}
+impl Cast for u128 {}
 impl Cast for u64 {}
 impl Cast for u32 {}
 impl Cast for u16 {}

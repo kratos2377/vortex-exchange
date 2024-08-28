@@ -1,13 +1,22 @@
-use std::fmt;
+use std::{fmt, ops::Neg};
 use anchor_lang::prelude::*;
-use anchor_spl::token_interface::{TokenAccount, TokenInterface};
+
 use borsh::{BorshDeserialize, BorshSerialize};
-use solana_program::sysvar::instructions;
 
-use crate::{errors::VortexDexResult, instructions::constraints::{can_sign_for_user, is_stats_for_user}};
+use crate::{casting::Cast, errors::{DexError, VortexDexResult}, get_then_update_id, instructions::constraints::{can_sign_for_user, is_stats_for_user}, safe_increment, safe_methods::SafeMath, utils::{constants::{FUEL_START_TS, OPEN_ORDER_MARGIN_REQUIREMENT, QUOTE_PRECISION_U64, QUOTE_SPOT_MARKET_INDEX}, margin_utils::{calculate_margin_requirement_and_total_collateral_and_liability_info, validate_any_isolated_tier_requirements}, spot_market_utils::{get_signed_token_amount, get_strict_token_value, get_token_amount, get_token_value}}, validate};
 
-use super::{dex_state::DexState, position::PositionDirection, spot_market::{SpotBalanceType, SpotMarket}, user_stats::UserStats};
+use super::{margin_calculation::{MarginCalculation, MarginContext}, oracle::StrictOraclePrice, oracle_map::OracleMap, position::PositionDirection, spot_market::{SpotBalanceType, SpotMarket}, spot_market_map::SpotMarketMap, user_stats::UserStats};
 use crate::utils::{constants::{SPOT_WEIGHT_PRECISION, SPOT_WEIGHT_PRECISION_I128}, margin_utils::MarginRequirementType};
+
+
+#[derive(Clone, Copy, BorshSerialize, BorshDeserialize, PartialEq, Debug, Eq)]
+pub enum UserStatus {
+    // Active = 0
+    BeingLiquidated = 0b00000001,
+    Bankrupt = 0b00000010,
+    ReduceOnly = 0b00000100,
+    AdvancedLp = 0b00001000,
+}
 
 
 #[account(zero_copy(unsafe))]
@@ -29,11 +38,401 @@ pub struct User {
     pub last_active_slot: u64,
     pub next_order_id: u32,
     pub max_margin_ratio: u32,
-    pub next_liquidation_id: u16
+    pub next_liquidation_id: u16,
+    pub idle: bool,
+    pub open_orders: u8,
+    pub has_open_order: bool,
+    pub open_auctions: u8,
+    pub has_open_auction: bool,
+    pub last_fuel_bonus_update_ts: u32,
 }
 
 impl User {
     pub const SIZE: usize = 4376;
+
+
+    pub fn is_being_liquidated(&self) -> bool {
+        self.status & (UserStatus::BeingLiquidated as u8 | UserStatus::Bankrupt as u8) > 0
+    }
+
+    pub fn is_bankrupt(&self) -> bool {
+        self.status & (UserStatus::Bankrupt as u8) > 0
+    }
+
+    pub fn is_reduce_only(&self) -> bool {
+        self.status & (UserStatus::ReduceOnly as u8) > 0
+    }
+
+    pub fn is_advanced_lp(&self) -> bool {
+        self.status & (UserStatus::AdvancedLp as u8) > 0
+    }
+
+    pub fn add_user_status(&mut self, status: UserStatus) {
+        self.status |= status as u8;
+    }
+
+    pub fn remove_user_status(&mut self, status: UserStatus) {
+        self.status &= !(status as u8);
+    }
+
+    pub fn get_spot_position_index(&self, market_index: u16) -> VortexDexResult<usize> {
+        // first spot position is always quote asset
+        if market_index == 0 {
+            validate!(
+                self.spot_positions[0].market_index == 0,
+                DexError::DefaultError,
+                "User position 0 not market_index=0"
+            )?;
+            return Ok(0);
+        }
+
+        self.spot_positions
+            .iter()
+            .position(|spot_position| spot_position.market_index == market_index)
+            .ok_or(DexError::CouldNotFindSpotPosition)
+    }
+
+    pub fn get_spot_position(&self, market_index: u16) -> VortexDexResult<&SpotPosition> {
+        self.get_spot_position_index(market_index)
+            .map(|market_index| &self.spot_positions[market_index])
+    }
+
+    pub fn get_spot_position_mut(&mut self, market_index: u16) -> VortexDexResult<&mut SpotPosition> {
+        self.get_spot_position_index(market_index)
+            .map(move |market_index| &mut self.spot_positions[market_index])
+    }
+
+    pub fn get_quote_spot_position(&self) -> &SpotPosition {
+        match self.get_spot_position(QUOTE_SPOT_MARKET_INDEX) {
+            Ok(position) => position,
+            Err(_) => unreachable!(),
+        }
+    }
+
+    pub fn get_quote_spot_position_mut(&mut self) -> &mut SpotPosition {
+        match self.get_spot_position_mut(QUOTE_SPOT_MARKET_INDEX) {
+            Ok(position) => position,
+            Err(_) => unreachable!(),
+        }
+    }
+
+    pub fn add_spot_position(
+        &mut self,
+        market_index: u16,
+        balance_type: SpotBalanceType,
+    ) -> VortexDexResult<usize> {
+        let new_spot_position_index = self
+            .spot_positions
+            .iter()
+            .enumerate()
+            .position(|(index, spot_position)| index != 0 && spot_position.is_available())
+            .ok_or(DexError::NoSpotPositionAvailable)?;
+
+        let new_spot_position = SpotPosition {
+            market_index,
+            balance_type,
+            ..SpotPosition::default()
+        };
+
+        self.spot_positions[new_spot_position_index] = new_spot_position;
+
+        Ok(new_spot_position_index)
+    }
+
+    pub fn force_get_spot_position_mut(
+        &mut self,
+        market_index: u16,
+    ) -> VortexDexResult<&mut SpotPosition> {
+        self.get_spot_position_index(market_index)
+            .or_else(|_| self.add_spot_position(market_index, SpotBalanceType::Deposit))
+            .map(move |market_index| &mut self.spot_positions[market_index])
+    }
+
+    pub fn force_get_spot_position_index(&mut self, market_index: u16) -> VortexDexResult<usize> {
+        self.get_spot_position_index(market_index)
+            .or_else(|_| self.add_spot_position(market_index, SpotBalanceType::Deposit))
+    }
+
+    pub fn get_order_index(&self, order_id: u32) -> VortexDexResult<usize> {
+        self.orders
+            .iter()
+            .position(|order| order.order_id == order_id && order.status == OrderStatus::Open)
+            .ok_or(DexError::OrderDoesNotExist)
+    }
+
+    pub fn get_order_index_by_user_order_id(&self, user_order_id: u8) -> VortexDexResult<usize> {
+        self.orders
+            .iter()
+            .position(|order| {
+                order.user_order_id == user_order_id && order.status == OrderStatus::Open
+            })
+            .ok_or(DexError::OrderDoesNotExist)
+    }
+
+    pub fn get_order(&self, order_id: u32) -> Option<&Order> {
+        self.orders.iter().find(|order| order.order_id == order_id)
+    }
+
+    pub fn get_last_order_id(&self) -> u32 {
+        if self.next_order_id == 1 {
+            u32::MAX
+        } else {
+            self.next_order_id - 1
+        }
+    }
+
+    pub fn increment_total_deposits(
+        &mut self,
+        amount: u64,
+        price: i64,
+        precision: u128,
+    ) -> VortexDexResult {
+        let value = amount
+            .cast::<u128>()?
+            .safe_mul(price.cast::<u128>()?)?
+            .safe_div(precision)?
+            .cast::<u64>()?;
+        self.total_deposits = self.total_deposits.saturating_add(value);
+
+        Ok(())
+    }
+
+    pub fn increment_total_withdraws(
+        &mut self,
+        amount: u64,
+        price: i64,
+        precision: u128,
+    ) -> VortexDexResult {
+        let value = amount
+            .cast::<u128>()?
+            .safe_mul(price.cast()?)?
+            .safe_div(precision)?
+            .cast::<u64>()?;
+        self.total_withdraws = self.total_withdraws.saturating_add(value);
+
+        Ok(())
+    }
+
+    // pub fn increment_total_socialized_loss(&mut self, value: u64) -> VortexDexResult {
+    //     self.total_social_loss = self.total_social_loss.saturating_add(value);
+
+    //     Ok(())
+    // }
+
+    pub fn update_cumulative_spot_fees(&mut self, amount: i64) -> VortexDexResult {
+        safe_increment!(self.cumulative_spot_fees, amount);
+        Ok(())
+    }
+
+
+
+    pub fn enter_liquidation(&mut self, slot: u64) -> VortexDexResult<u16> {
+        if self.is_being_liquidated() {
+            return self.next_liquidation_id.safe_sub(1);
+        }
+
+        self.add_user_status(UserStatus::BeingLiquidated);
+        self.liquidation_margin_freed = 0;
+        self.last_active_slot = slot;
+        Ok(get_then_update_id!(self, next_liquidation_id))
+    }
+
+    pub fn exit_liquidation(&mut self) {
+        self.remove_user_status(UserStatus::BeingLiquidated);
+        self.remove_user_status(UserStatus::Bankrupt);
+        self.liquidation_margin_freed = 0;
+    }
+
+    pub fn enter_bankruptcy(&mut self) {
+        self.remove_user_status(UserStatus::BeingLiquidated);
+        self.add_user_status(UserStatus::Bankrupt);
+    }
+
+    pub fn exit_bankruptcy(&mut self) {
+        self.remove_user_status(UserStatus::BeingLiquidated);
+        self.remove_user_status(UserStatus::Bankrupt);
+        self.liquidation_margin_freed = 0;
+    }
+
+    pub fn increment_margin_freed(&mut self, margin_free: u64) -> VortexDexResult {
+        self.liquidation_margin_freed = self.liquidation_margin_freed.safe_add(margin_free)?;
+        Ok(())
+    }
+
+    pub fn update_last_active_slot(&mut self, slot: u64) {
+        if !self.is_being_liquidated() {
+            self.last_active_slot = slot;
+        }
+        self.idle = false;
+    }
+
+    pub fn increment_open_orders(&mut self, is_auction: bool) {
+        self.open_orders = self.open_orders.saturating_add(1);
+        self.has_open_order = self.open_orders > 0;
+        if is_auction {
+            self.increment_open_auctions();
+        }
+    }
+
+    pub fn increment_open_auctions(&mut self) {
+        self.open_auctions = self.open_auctions.saturating_add(1);
+        self.has_open_auction = self.open_auctions > 0;
+    }
+
+    pub fn decrement_open_orders(&mut self, is_auction: bool) {
+        self.open_orders = self.open_orders.saturating_sub(1);
+        self.has_open_order = self.open_orders > 0;
+        if is_auction {
+            self.open_auctions = self.open_auctions.saturating_sub(1);
+            self.has_open_auction = self.open_auctions > 0;
+        }
+    }
+
+    pub fn qualifies_for_withdraw_fee(&self, user_stats: &UserStats, slot: u64) -> bool {
+        // only qualifies for user with recent last_active_slot (~25 seconds)
+        if slot.saturating_sub(self.last_active_slot) >= 50 {
+            return false;
+        }
+
+        let min_total_withdraws = 10_000_000 * QUOTE_PRECISION_U64; // $10M
+
+        // if total withdraws are greater than $10M and user has paid more than %.01 of it in fees
+        self.total_withdraws >= min_total_withdraws
+            && self.total_withdraws / user_stats.fees.total_fee_paid.max(1) > 10_000
+    }
+
+    pub fn update_reduce_only_status(&mut self, reduce_only: bool) -> VortexDexResult {
+        if reduce_only {
+            self.add_user_status(UserStatus::ReduceOnly);
+        } else {
+            self.remove_user_status(UserStatus::ReduceOnly);
+        }
+
+        Ok(())
+    }
+
+    pub fn update_advanced_lp_status(&mut self, advanced_lp: bool) -> VortexDexResult {
+        if advanced_lp {
+            self.add_user_status(UserStatus::AdvancedLp);
+        } else {
+            self.remove_user_status(UserStatus::AdvancedLp);
+        }
+
+        Ok(())
+    }
+
+    pub fn has_room_for_new_order(&self) -> bool {
+        for order in self.orders.iter() {
+            if order.status == OrderStatus::Init {
+                return true;
+            }
+        }
+
+        false
+    }
+
+    pub fn get_fuel_bonus_numerator(&self, now: i64) -> VortexDexResult<i64> {
+        if self.last_fuel_bonus_update_ts > 0 {
+            now.safe_sub(self.last_fuel_bonus_update_ts.cast()?)
+        } else {
+            // start ts for existing accounts pre fuel
+            if now > FUEL_START_TS {
+                return Ok(now.safe_sub(FUEL_START_TS)?);
+            } else {
+                return Ok(0);
+            }
+        }
+    }
+
+    pub fn calculate_margin_and_increment_fuel_bonus(
+        &mut self,
+        spot_market_map: &SpotMarketMap,
+        oracle_map: &mut OracleMap,
+        context: MarginContext,
+        user_stats: &mut UserStats,
+        now: i64,
+    ) -> VortexDexResult<MarginCalculation> {
+        let fuel_bonus_numerator = self.get_fuel_bonus_numerator(now)?;
+
+        validate!(
+            context.fuel_bonus_numerator == fuel_bonus_numerator,
+            DexError::DefaultError,
+            "Bad fuel bonus update attempt {} != {} (now = {})",
+            context.fuel_bonus_numerator,
+            fuel_bonus_numerator,
+            now
+        )?;
+
+        let margin_calculation =
+            calculate_margin_requirement_and_total_collateral_and_liability_info(
+                self,
+                spot_market_map,
+                oracle_map,
+                context,
+            )?;
+
+        user_stats.update_fuel_bonus(
+            self,
+            margin_calculation.fuel_deposits,
+            margin_calculation.fuel_borrows,
+            margin_calculation.fuel_positions,
+            now,
+        )?;
+
+        Ok(margin_calculation)
+    }
+
+    pub fn meets_withdraw_margin_requirement_and_increment_fuel_bonus(
+        &mut self,
+        spot_market_map: &SpotMarketMap,
+        oracle_map: &mut OracleMap,
+        margin_requirement_type: MarginRequirementType,
+        withdraw_market_index: u16,
+        withdraw_amount: u128,
+        user_stats: &mut UserStats,
+        now: i64,
+    ) -> VortexDexResult<bool> {
+        let strict = margin_requirement_type == MarginRequirementType::Initial;
+        let context = MarginContext::standard(margin_requirement_type)
+            .strict(strict)
+            .fuel_spot_delta(withdraw_market_index, withdraw_amount.cast::<i128>()?)
+            .fuel_numerator(self, now);
+
+        let calculation = calculate_margin_requirement_and_total_collateral_and_liability_info(
+            self,
+            spot_market_map,
+            oracle_map,
+            context,
+        )?;
+
+        if calculation.margin_requirement > 0 || calculation.get_num_of_liabilities()? > 0 {
+            validate!(
+                calculation.all_oracles_valid,
+                DexError::InvalidOracle,
+                "User attempting to withdraw with outstanding liabilities when an oracle is invalid"
+            )?;
+        }
+
+        validate_any_isolated_tier_requirements(self, calculation)?;
+
+        validate!(
+            calculation.meets_margin_requirement(),
+            DexError::InsufficientCollateral,
+            "User attempting to withdraw where total_collateral {} is below initial_margin_requirement {}",
+            calculation.total_collateral,
+            calculation.margin_requirement
+        )?;
+
+        user_stats.update_fuel_bonus(
+            self,
+            calculation.fuel_deposits,
+            calculation.fuel_borrows,
+            calculation.fuel_positions,
+            now,
+        )?;
+
+        Ok(true)
+    }
 }
 
 #[zero_copy(unsafe)]
@@ -48,6 +447,144 @@ pub struct SpotPosition {
     pub balance_type: SpotBalanceType,
     pub open_orders: u8,
     pub padding: [u8; 4],
+}
+
+impl SpotPosition {
+    pub fn is_available(&self) -> bool {
+        self.scaled_balance == 0 && self.open_orders == 0
+    }
+
+    pub fn has_open_order(&self) -> bool {
+        self.open_orders != 0 || self.open_bids != 0 || self.open_asks != 0
+    }
+
+    pub fn margin_requirement_for_open_orders(&self) -> VortexDexResult<u128> {
+        self.open_orders
+            .cast::<u128>()?
+            .safe_mul(OPEN_ORDER_MARGIN_REQUIREMENT)
+    }
+
+    pub fn get_token_amount(&self, spot_market: &SpotMarket) -> VortexDexResult<u128> {
+        get_token_amount(self.scaled_balance.cast()?, spot_market, &self.balance_type)
+    }
+
+    pub fn get_signed_token_amount(&self, spot_market: &SpotMarket) -> VortexDexResult<i128> {
+        get_signed_token_amount(
+            get_token_amount(self.scaled_balance.cast()?, spot_market, &self.balance_type)?,
+            &self.balance_type,
+        )
+    }
+
+    pub fn get_worst_case_fill_simulation(
+        &self,
+        spot_market: &SpotMarket,
+        strict_oracle_price: &StrictOraclePrice,
+        token_amount: Option<i128>,
+        margin_type: MarginRequirementType,
+    ) -> VortexDexResult<OrderFillSimulation> {
+        let [bid_simulation, ask_simulation] = self.simulate_fills_both_sides(
+            spot_market,
+            strict_oracle_price,
+            token_amount,
+            margin_type,
+        )?;
+
+        Ok(OrderFillSimulation::riskier_side(
+            ask_simulation,
+            bid_simulation,
+        ))
+    }
+
+    pub fn simulate_fills_both_sides(
+        &self,
+        spot_market: &SpotMarket,
+        strict_oracle_price: &StrictOraclePrice,
+        token_amount: Option<i128>,
+        margin_type: MarginRequirementType,
+    ) -> VortexDexResult<[OrderFillSimulation; 2]> {
+        let token_amount = match token_amount {
+            Some(token_amount) => token_amount,
+            None => self.get_signed_token_amount(spot_market)?,
+        };
+
+        let token_value =
+            get_strict_token_value(token_amount, spot_market.decimals, strict_oracle_price)?;
+
+        let calculate_weighted_token_value = |token_amount: i128, token_value: i128| {
+            if token_value > 0 {
+                let asset_weight = spot_market.get_asset_weight(
+                    token_amount.unsigned_abs(),
+                    strict_oracle_price.current,
+                    &margin_type,
+                )?;
+
+                token_value
+                    .safe_mul(asset_weight.cast()?)?
+                    .safe_div(SPOT_WEIGHT_PRECISION_I128)
+            } else if token_value < 0 {
+                let liability_weight =
+                    spot_market.get_liability_weight(token_amount.unsigned_abs(), &margin_type)?;
+
+                token_value
+                    .safe_mul(liability_weight.cast()?)?
+                    .safe_div(SPOT_WEIGHT_PRECISION_I128)
+            } else {
+                Ok(0)
+            }
+        };
+
+        if self.open_bids == 0 && self.open_asks == 0 {
+            let weighted_token_value = calculate_weighted_token_value(token_amount, token_value)?;
+
+            let calculation = OrderFillSimulation {
+                token_amount,
+                orders_value: 0,
+                token_value,
+                weighted_token_value,
+                free_collateral_contribution: weighted_token_value,
+            };
+
+            return Ok([calculation, calculation]);
+        }
+
+        let simulate_side = |strict_oracle_price: &StrictOraclePrice,
+                             token_amount: i128,
+                             open_orders: i128| {
+            let order_value = get_token_value(
+                -open_orders,
+                spot_market.decimals,
+                strict_oracle_price.max(),
+            )?;
+            let token_amount_after_fill = token_amount.safe_add(open_orders)?;
+            let token_value_after_fill = token_value.safe_add(order_value.neg())?;
+
+            let weighted_token_value_after_fill =
+                calculate_weighted_token_value(token_amount_after_fill, token_value_after_fill)?;
+
+            let free_collateral_contribution =
+                weighted_token_value_after_fill.safe_add(order_value)?;
+
+            Ok(OrderFillSimulation {
+                token_amount: token_amount_after_fill,
+                orders_value: order_value,
+                token_value: token_value_after_fill,
+                weighted_token_value: weighted_token_value_after_fill,
+                free_collateral_contribution,
+            })
+        };
+
+        let bid_simulation =
+            simulate_side(strict_oracle_price, token_amount, self.open_bids.cast()?)?;
+
+        let ask_simulation =
+            simulate_side(strict_oracle_price, token_amount, self.open_asks.cast()?)?;
+
+        Ok([bid_simulation, ask_simulation])
+    }
+
+    pub fn is_borrow(&self) -> bool {
+        self.scaled_balance > 0 && self.balance_type == SpotBalanceType::Borrow
+    }
 }
 
 #[zero_copy(unsafe)]
@@ -189,7 +726,6 @@ impl fmt::Display for MarketType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             MarketType::Spot => write!(f, "Spot"),
-            MarketType::Perp => write!(f, "Perp"),
         }
     }
 }
