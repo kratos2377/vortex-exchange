@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 
-use crate::{errors::VortexDexResult, state::position::PositionDirection};
+use crate::{casting::Cast, errors::VortexDexResult, safe_methods::SafeMath, state::position::PositionDirection};
 
 use super::constants::PRICE_TO_QUOTE_PRECISION_RATIO;
 

@@ -1,7 +1,9 @@
+use std::io::Write;
+
 use anchor_lang::{prelude::*, Discriminator};
 use borsh::{BorshDeserialize, BorshSerialize};
 
-use crate::errors::{DexError, VortexDexResult};
+use crate::{casting::Cast, errors::{DexError, VortexDexResult}, safe_methods::SafeUnwrap};
 
 use super::{position::PositionDirection, user::{MarketType, Order}};
 

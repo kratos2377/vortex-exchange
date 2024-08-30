@@ -1,6 +1,10 @@
-use crate::{errors::VortexDexResult, state::{oracle::OraclePriceData, position::PositionDirection}, user::Order};
+use std::cmp::min;
 
-use super::constants::AUCTION_DERIVE_PRICE_FRACTION;
+use solana_program::msg;
+
+use crate::{casting::Cast, errors::{DexError, VortexDexResult}, safe_methods::SafeMath, state::{oracle::OraclePriceData, position::PositionDirection}, user::{Order, OrderType}};
+
+use super::{constants::AUCTION_DERIVE_PRICE_FRACTION, order_utils::standardize_price};
 
 pub fn calculate_auction_prices(
     oracle_price_data: &OraclePriceData,
@@ -81,4 +85,128 @@ pub fn calculate_auction_params_for_trigger_order(
 
         Ok((auction_duration, auction_start_price, auction_end_price))
     
+}
+
+pub fn calculate_auction_price(
+    order: &Order,
+    slot: u64,
+    tick_size: u64,
+    valid_oracle_price: Option<i64>,
+) -> VortexDexResult<u64> {
+    match order.order_type {
+        OrderType::Market
+        | OrderType::TriggerMarket
+        | OrderType::Limit
+        | OrderType::TriggerLimit => {
+            calculate_auction_price_for_fixed_auction(order, slot, tick_size)
+        }
+        OrderType::Oracle => calculate_auction_price_for_oracle_offset_auction(
+            order,
+            slot,
+            tick_size,
+            valid_oracle_price,
+        ),
+    }
+}
+
+
+fn calculate_auction_price_for_fixed_auction(
+    order: &Order,
+    slot: u64,
+    tick_size: u64,
+) -> VortexDexResult<u64> {
+    let slots_elapsed = slot.safe_sub(order.slot)?;
+
+    let delta_numerator = min(slots_elapsed, order.auction_duration.cast()?);
+    let delta_denominator = order.auction_duration;
+
+    let auction_start_price = order.auction_start_price.cast::<u64>()?;
+    let auction_end_price = order.auction_end_price.cast::<u64>()?;
+
+    if delta_denominator == 0 {
+        return standardize_price(auction_end_price, tick_size, order.direction);
+    }
+
+    let price_delta = match order.direction {
+        PositionDirection::Long => auction_end_price
+            .safe_sub(auction_start_price)?
+            .safe_mul(delta_numerator.cast()?)?
+            .safe_div(delta_denominator.cast()?)?,
+        PositionDirection::Short => auction_start_price
+            .safe_sub(auction_end_price)?
+            .safe_mul(delta_numerator.cast()?)?
+            .safe_div(delta_denominator.cast()?)?,
+    };
+
+    let price = match order.direction {
+        PositionDirection::Long => auction_start_price.safe_add(price_delta)?,
+        PositionDirection::Short => auction_start_price.safe_sub(price_delta)?,
+    };
+
+    standardize_price(price, tick_size, order.direction)
+}
+
+fn calculate_auction_price_for_oracle_offset_auction(
+    order: &Order,
+    slot: u64,
+    tick_size: u64,
+    valid_oracle_price: Option<i64>,
+) -> VortexDexResult<u64> {
+    let oracle_price = valid_oracle_price.ok_or_else(|| {
+        msg!("Could not find oracle too calculate oracle offset auction price");
+        DexError::OracleNotFound
+    })?;
+
+    let slots_elapsed = slot.safe_sub(order.slot)?;
+
+    let delta_numerator = min(slots_elapsed, order.auction_duration.cast()?);
+    let delta_denominator = order.auction_duration;
+
+    let auction_start_price_offset = order.auction_start_price;
+    let auction_end_price_offset = order.auction_end_price;
+
+    if delta_denominator == 0 {
+        let price = oracle_price
+            .safe_add(auction_end_price_offset)?
+            .max(tick_size.cast()?);
+
+        return standardize_price(price.cast()?, tick_size, order.direction);
+    }
+
+    let price_offset_delta = match order.direction {
+        PositionDirection::Long => auction_end_price_offset
+            .safe_sub(auction_start_price_offset)?
+            .safe_mul(delta_numerator.cast()?)?
+            .safe_div(delta_denominator.cast()?)?,
+        PositionDirection::Short => auction_start_price_offset
+            .safe_sub(auction_end_price_offset)?
+            .safe_mul(delta_numerator.cast()?)?
+            .safe_div(delta_denominator.cast()?)?,
+    };
+
+    let price_offset = match order.direction {
+        PositionDirection::Long => auction_start_price_offset.safe_add(price_offset_delta)?,
+        PositionDirection::Short => auction_start_price_offset.safe_sub(price_offset_delta)?,
+    };
+
+    let price = standardize_price(
+        oracle_price
+            .safe_add(price_offset)?
+            .max(tick_size.cast()?)
+            .cast()?,
+        tick_size,
+        order.direction,
+    )?;
+
+    Ok(price)
+}
+
+pub fn is_auction_complete(order_slot: u64, auction_duration: u8, slot: u64) -> VortexDexResult<bool> {
+    if auction_duration == 0 {
+        return Ok(true);
+    }
+
+    let slots_elapsed = slot.safe_sub(order_slot)?;
+
+    Ok(slots_elapsed > auction_duration.cast()?)
 }

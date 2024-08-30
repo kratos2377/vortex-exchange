@@ -3,7 +3,7 @@ use std::fmt::{self, Display, Formatter};
 use anchor_lang::prelude::*;
 use borsh::{BorshDeserialize, BorshSerialize};
 
-use crate::{errors::VortexDexResult, utils::{spot_market_utils::{calculate_utilization, get_token_amount, get_token_value}, stats_utils::calculate_new_twap}, validate};
+use crate::{casting::Cast, errors::{DexError, VortexDexResult}, safe_methods::SafeMath, utils::{spot_market_utils::{calculate_utilization, get_token_amount, get_token_value}, stats_utils::calculate_new_twap}, validate};
 
 use super::{operations::SpotOperation, oracle::{HistoricalIndexData, HistoricalOracleData, OracleSource}};
 use crate::utils::constants::{AMM_RESERVE_PRECISION, FIVE_MINUTE, MARGIN_PRECISION, ONE_HOUR, PERCENTAGE_PRECISION, PRICE_PRECISION_I64, SPOT_CUMULATIVE_INTEREST_PRECISION, SPOT_WEIGHT_PRECISION_U128};
@@ -33,7 +33,7 @@ pub struct SpotMarket {
     pub spot_fee_pool: PoolBalance,
     // /// Details on the insurance fund covering bankruptcies in this markets token
     // /// Covers bankruptcies for borrows with this markets token and perps settling in this markets token
-    // pub insurance_fund: InsuranceFund,
+    pub insurance_fund: InsuranceFund,
     /// The total spot fees collected for this market
     /// precision: QUOTE_PRECISION
     pub total_spot_fee: u128,
@@ -206,6 +206,7 @@ impl Default for SpotMarket {
             historical_index_data: HistoricalIndexData::default(),
             revenue_pool: PoolBalance::default(),
             spot_fee_pool: PoolBalance::default(),
+            insurance_fund: InsuranceFund::default(),
             total_spot_fee: 0,
             deposit_balance: 0,
             borrow_balance: 0,
@@ -412,7 +413,7 @@ impl SpotMarket {
     ) -> VortexDexResult<u32> {
         let liability_weight = match margin_requirement_type {
             MarginRequirementType::Initial => self.initial_liability_weight,
-            MarginRequirementType::Fill => return Err(ErrorCode::DefaultError),
+            MarginRequirementType::Fill => return Err(DexError::DefaultError),
             MarginRequirementType::Maintenance => self.maintenance_liability_weight,
         };
         liability_weight.safe_sub(MARGIN_PRECISION)
@@ -435,7 +436,7 @@ impl SpotMarket {
 
         validate!(
             max_token_deposits == 0 || deposits <= max_token_deposits,
-            ErrorCode::MaxDeposit,
+            DexError::MaxDeposit,
             "max token amount ({}) < deposits ({})",
             max_token_deposits,
             deposits,
@@ -452,7 +453,7 @@ impl SpotMarket {
 
             validate!(
                 max_token_borrows == 0 || borrows <= max_token_borrows,
-                ErrorCode::MaxBorrows,
+                DexError::MaxBorrows,
                 "max token amount ({}) < borrows ({})",
                 max_token_borrows,
                 borrows,
@@ -621,7 +622,7 @@ impl SpotBalance for PoolBalance {
     }
 
     fn update_balance_type(&mut self, _balance_type: SpotBalanceType) -> VortexDexResult {
-        Err(ErrorCode::CantUpdatePoolBalanceType)
+        Err(DexError::CantUpdatePoolBalanceType)
     }
 }
 
@@ -742,4 +743,19 @@ impl ContractTier {
             other >= &AssetTier::Cross && self <= &ContractTier::C
         }
     }
+}
+
+#[zero_copy(unsafe)]
+#[derive(Default, Eq, PartialEq, Debug)]
+#[repr(C)]
+pub struct InsuranceFund {
+    pub vault: Pubkey,
+    pub total_shares: u128,
+    pub user_shares: u128,
+    pub shares_base: u128,     // exponent for lp shares (for rebasing)
+    pub unstaking_period: i64, // if_unstaking_period
+    pub last_revenue_settle_ts: i64,
+    pub revenue_settle_period: i64,
+    pub total_factor: u32, // percentage of interest for total insurance
+    pub user_factor: u32,  // percentage of interest for user staked insurance
 }

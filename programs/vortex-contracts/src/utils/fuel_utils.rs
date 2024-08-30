@@ -1,6 +1,8 @@
 use std::cmp::{max, min};
 
-use crate::{errors::VortexDexResult, state::{dex_state::{FeeStructure, FeeTier, OrderFillerRewardStructure}, spot_market::SpotMarket, user::MarketType, user_stats::UserStats}, utils::constants::{FUEL_WINDOW_U128, QUOTE_PRECISION, QUOTE_PRECISION_U64}};
+use num_integer::Roots;
+
+use crate::{casting::Cast, errors::VortexDexResult, safe_methods::SafeMath, state::{dex_state::{FeeStructure, FeeTier, OrderFillerRewardStructure}, spot_market::SpotMarket, user::MarketType, user_stats::UserStats}, utils::constants::{FUEL_WINDOW_U128, QUOTE_PRECISION, QUOTE_PRECISION_U64}};
 
 use super::{constants::{FEE_ADJUSTMENT_MAX, TEN_BPS}, fees_utils::determine_user_fee_tier};
 

@@ -1,6 +1,6 @@
 use std::cmp::min;
 
-use crate::{errors::VortexDexResult, state::{position::PositionDirection, user::Order}};
+use crate::{casting::Cast, errors::VortexDexResult, safe_methods::SafeMath, state::{position::PositionDirection, user::Order}};
 
 use super::{constants::{BID_ASK_SPREAD_PRECISION_I128, TEN_BPS_I64}, order_utils::calculate_quote_asset_amount_for_maker_order};
 

@@ -1,8 +1,9 @@
 use std::cmp::{max, min, Ordering};
 
+use num_integer::Roots;
 use solana_program::msg;
 
-use crate::{errors::{DexError, VortexDexResult}, state::{margin_calculation::{MarginCalculation, MarginContext, MarketIdentifier}, oracle::StrictOraclePrice, oracle_map::OracleMap, spot_market::{AssetTier, ContractTier, SpotBalanceType}, spot_market_map::SpotMarketMap, user::{MarketType, OrderFillSimulation, User}}, utils::{oracle_utils::{is_oracle_valid_for_action, VortexDexAction}, spot_market_utils::{get_strict_token_value, get_token_value}, validation_utils}, validate};
+use crate::{casting::Cast, errors::{DexError, VortexDexResult}, safe_methods::SafeMath, state::{margin_calculation::{MarginCalculation, MarginContext, MarketIdentifier}, oracle::StrictOraclePrice, oracle_map::OracleMap, spot_market::{AssetTier, ContractTier, SpotBalanceType}, spot_market_map::SpotMarketMap, user::{MarketType, OrderFillSimulation, User}}, utils::{oracle_utils::{is_oracle_valid_for_action, VortexDexAction}, spot_market_utils::{get_strict_token_value, get_token_value}, validation_utils}, validate};
 
 use super::constants::{MARGIN_PRECISION_U128, PRICE_PRECISION, SPOT_IMF_PRECISION_U128, SPOT_WEIGHT_PRECISION_U128};
 
@@ -322,11 +323,6 @@ pub fn validate_any_isolated_tier_requirements(
             "User attempting to increase perp liabilities above 1 with a isolated tier liability"
         )?;
 
-        validate!(
-            !user.is_margin_trading_enabled,
-            DexError::IsolatedAssetTierViolation,
-            "User attempting isolated tier liability with margin trading enabled"
-        )?;
 
         if calculation.num_spot_liabilities > 0 {
             let quote_spot_position = user.get_quote_spot_position();

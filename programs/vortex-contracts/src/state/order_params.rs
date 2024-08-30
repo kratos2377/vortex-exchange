@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 use borsh::{BorshDeserialize, BorshSerialize};
-use crate::{errors::VortexDexResult, utils::constants::PERCENTAGE_PRECISION_I64};
+use crate::{errors::VortexDexResult, safe_methods::SafeMath, utils::constants::PERCENTAGE_PRECISION_I64};
 
 use super::{events::OrderActionExplanation, position::PositionDirection, user::{MarketType, OrderTriggerCondition, OrderType}};
 

@@ -6,6 +6,7 @@ use anchor_spl::token_2022::spl_token_2022::extension::{
 use anchor_spl::token_2022::spl_token_2022::state::Mint as MintInner;
 use anchor_spl::token_interface::{self, CloseAccount, Mint, TokenAccount, TokenInterface, Transfer, TransferChecked};
 
+use crate::errors::DexError;
 use crate::utils::general_util::get_signer_seeds;
 use crate::validate;
 
@@ -113,7 +114,7 @@ pub fn validate_mint_fee(account_info: &AccountInfo) -> Result<()> {
                 .get_epoch_fee(Clock::get()?.epoch)
                 .transfer_fee_basis_points,
         );
-        validate!(fee == 0, ErrorCode::NonZeroTransferFee)?
+        validate!(fee == 0, DexError::NonZeroTransferFee)?
     }
 
     Ok(())

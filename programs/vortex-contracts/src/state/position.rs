@@ -6,3 +6,12 @@ pub enum PositionDirection {
     Long,
     Short,
 }
+
+impl PositionDirection {
+    pub fn opposite(&self) -> Self {
+        match self {
+            PositionDirection::Long => PositionDirection::Short,
+            PositionDirection::Short => PositionDirection::Long,
+        }
+    }
+}

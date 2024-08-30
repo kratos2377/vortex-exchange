@@ -1,4 +1,4 @@
-use serum_dex::error::DexError;
+use crate::errors::DexError;
 
 use crate::{errors::VortexDexResult, spot_market::SpotBalanceType, user::{OrderStatus, User}, validate};
 
@@ -85,19 +85,6 @@ pub fn is_user_bankrupt(user: &User) -> bool {
         }
     }
 
-    for perp_position in user.perp_positions.iter() {
-        if perp_position.base_asset_amount != 0
-            || perp_position.quote_asset_amount > 0
-            || perp_position.has_open_order()
-            || perp_position.is_lp()
-        {
-            return false;
-        }
-
-        if perp_position.quote_asset_amount < 0 {
-            has_liability = true;
-        }
-    }
 
     has_liability
 }

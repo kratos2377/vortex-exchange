@@ -2,7 +2,13 @@
 #![allow(clippy::bool_assert_comparison)]
 #![allow(clippy::comparison_chain)]
 use anchor_lang::prelude::*;
-
+use dex_state::{FeeStructure, OracleGuardRails};
+use game_stake::BetType;
+use oracle::OracleSource;
+use order_params::{ModifyOrderParams, OrderParams};
+use position::PositionDirection;
+use spot_market::{AssetTier, MarketStatus, SpotFulfillmentConfigStatus};
+use user::MarketType;
 
 pub mod errors;
 pub mod state;
@@ -24,14 +30,7 @@ declare_id!("HkApQpEsdzdfHsedkuZvNEbmcQXfabobbb9Yf8wdz7AZ");
 pub mod vortex_contracts {
 
     use super::*;
-    use dex_state::{FeeStructure, OracleGuardRails};
-    use game_stake::BetType;
-    use instructions::{admins::{handle_admin_initialize, handle_initialize_spot_market, Initialize}, executors::SpotFulfillmentType};
-    use oracle::{OracleSource, PrelaunchOracleParams};
-    use order_params::{ModifyOrderParams, OrderParams};
-    use position::PositionDirection;
-    use spot_market::{AssetTier, MarketStatus, SpotFulfillmentConfigStatus};
-    use user::MarketType;
+
 
     
     // User instructions
@@ -698,7 +697,7 @@ pub mod vortex_contracts {
     pub fn initialize_game(
         ctx: Context<InitGame>,
         game_id: [u8; 16],
-        total_money_staked: f64,
+        total_money_staked: u64,
     
     ) -> Result<()> {
         handle_init_game(ctx, game_id, total_money_staked)
@@ -708,7 +707,7 @@ pub mod vortex_contracts {
     pub fn initialize_player_bet(
         ctx: Context<InitPlayerBet>,
         game_id: [u8; 16],
-        total_money_staked: f64,
+        total_money_staked: u64,
         user_betting_on_id: [u8;16]
     
     ) -> Result<()> {
@@ -721,7 +720,7 @@ pub mod vortex_contracts {
         ctx: Context<MakeUserGameBet>,
         game_id: [u8; 16],
         user_betting_on_id: [u8;16],
-        money_staked: f64,
+        money_staked: u64,
         bet_type: BetType
     
     ) -> Result<()> {
@@ -735,7 +734,7 @@ pub mod vortex_contracts {
         bet_type: BetType,
         game_id: [u8;16],
         user_betting_on_id: [u8;16],
-        money_staked: f64,
+        money_staked: u64,
     
     ) -> Result<()> {
         handle_update_bet(ctx, bet_type,  game_id, user_betting_on_id, money_staked)

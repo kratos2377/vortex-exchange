@@ -1,14 +1,14 @@
 use anchor_lang::prelude::*;
 use num_traits::ToBytes;
 use solana_program::native_token::LAMPORTS_PER_SOL;
-use crate::{controllers, errors::DexError, game_stake::{BetType, Game, PlayerTotalBet, UserGameBet}, ids::admin_hot_wallet, load_mut, validate};
+use crate::{casting::Cast, controllers, errors::DexError, game_stake::{BetType, Game, PlayerTotalBet, UserGameBet}, ids::admin_hot_wallet, load_mut, validate};
 
 
 
 pub fn handle_init_game(
     ctx: Context<InitGame>,
     game_id: [u8; 16],
-    total_money_staked: f64,
+    total_money_staked: u64,
 
 ) -> Result<()> {
     let game_key = ctx.accounts.game.key();
@@ -37,7 +37,7 @@ pub fn handle_init_game(
 pub fn handle_init_player_bet(
     ctx: Context<InitPlayerBet>,
     game_id: [u8; 16],
-    total_money_staked: f64,
+    total_money_staked: u64,
     user_betting_on_id: [u8;16]
 
 ) -> Result<()> {
@@ -80,7 +80,7 @@ pub fn handle_user_bet(
     ctx: Context<MakeUserGameBet>,
     game_id: [u8; 16],
     user_betting_on_id: [u8;16],
-    money_staked: f64,
+    money_staked: u64,
     bet_type: BetType
 ) -> Result<()> {
     let user_bet_account_model = load_mut!(ctx.accounts.user_bet)?;
@@ -126,7 +126,7 @@ pub fn handle_update_bet(
     bet_type: BetType,
     game_id: [u8;16],
     user_betting_on_id: [u8;16],
-    money_staked: f64,
+    money_staked: u64,
 ) -> Result<()> {
     let user_bet = &load_mut!(ctx.accounts.user_bet)?;
     let mut player_total_bet = load_mut!(ctx.accounts.player_total_bet)?;

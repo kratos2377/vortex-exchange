@@ -8,7 +8,7 @@ use borsh::{BorshDeserialize, BorshSerialize};
 pub struct Game {
     pub game_id: [u8;16],
     pub pubkey: Pubkey,
-    pub total_pot: f64,
+    pub total_pot: u64,
     pub is_game_active: bool,
     pub is_settled: bool,
 }
@@ -25,7 +25,7 @@ pub struct UserGameBet {
     pub user_bet_wallet_key: Pubkey,
     pub user_betting_on_id: [u8;16],
     pub bet_type: BetType,
-    pub money_staked: f64,
+    pub money_staked: u64,
     pub is_settled: bool,
 }
 
@@ -39,7 +39,7 @@ impl UserGameBet {
 pub struct PlayerTotalBet {
     pub game_id: [u8;16],
     pub user_betting_on_id: [u8;16],
-    pub total_money_staked_on_player: f64,
+    pub total_money_staked_on_player: u64,
 }
 
 impl PlayerTotalBet {
@@ -47,7 +47,7 @@ impl PlayerTotalBet {
 }
 
 
-#[derive(Clone, Copy, PartialEq, Debug, Eq, Default)]
+#[derive(Clone, Copy, BorshDeserialize , BorshSerialize , PartialEq, Debug, Eq, Default)]
 pub enum BetType {
     #[default]
     WIN,

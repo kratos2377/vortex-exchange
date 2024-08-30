@@ -1,6 +1,6 @@
 use std::cmp::max;
 
-use crate::errors::VortexDexResult;
+use crate::{casting::Cast, errors::VortexDexResult, safe_methods::SafeMath};
 
 pub fn calculate_rolling_sum(
     data1: u64,

@@ -1,4 +1,4 @@
-use crate::{errors::VortexDexResult, utils::constants::DEFAULT_MAX_TWAP_UPDATE_PRICE_BAND_DENOMINATOR};
+use crate::{errors::VortexDexResult, safe_methods::SafeMath, utils::constants::DEFAULT_MAX_TWAP_UPDATE_PRICE_BAND_DENOMINATOR};
 
 pub fn sanitize_new_price(
     new_price: i64,

@@ -3,7 +3,7 @@ use std::{cmp::max, fmt};
 use borsh::{BorshDeserialize, BorshSerialize};
 use solana_program::msg;
 
-use crate::{errors::{DexError, VortexDexResult}, state::{dex_state::ValidityGuardRails, oracle::OraclePriceData, user::MarketType}};
+use crate::{casting::Cast, errors::{DexError, VortexDexResult}, safe_methods::SafeMath, state::{dex_state::ValidityGuardRails, oracle::OraclePriceData, user::MarketType}};
 
 use super::constants::BID_ASK_SPREAD_PRECISION;
 

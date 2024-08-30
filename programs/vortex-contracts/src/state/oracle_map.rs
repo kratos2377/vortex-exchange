@@ -1,9 +1,9 @@
 use std::{collections::BTreeMap, iter::Peekable, slice::Iter};
 
-use anchor_lang::prelude::*;
+use anchor_lang::{prelude::*, Discriminator};
 use arrayref::array_ref;
 
-use crate::{errors::{DexError, VortexDexResult}, ids::{bonk_oracle, bonk_pull_oracle, vortex_oracle_program, pepe_oracle, pepe_pull_oracle, pyth_program, usdc_oracle, usdc_pull_oracle, usdt_oracle, usdt_pull_oracle, wen_oracle, wen_pull_oracle}, utils::oracle_utils::{oracle_validity, OracleValidity}, validate};
+use crate::{errors::{DexError, VortexDexResult}, ids::{bonk_oracle, bonk_pull_oracle, pepe_oracle, pepe_pull_oracle, pyth_program, usdc_oracle, usdc_pull_oracle, usdt_oracle, usdt_pull_oracle, vortex_oracle_program, wen_oracle, wen_pull_oracle}, safe_methods::SafeUnwrap, utils::oracle_utils::{oracle_validity, OracleValidity}, validate};
 
 use super::{dex_state::{OracleGuardRails, ValidityGuardRails}, oracle::{get_oracle_price, OraclePriceData, OracleSource, PrelaunchOracle}, user::MarketType};
 use crate::utils::constants::PRICE_PRECISION_I64;

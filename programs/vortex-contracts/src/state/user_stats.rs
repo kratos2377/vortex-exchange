@@ -1,6 +1,10 @@
+use std::cmp::max;
+
 use anchor_lang::prelude::*;
 
-use super::user_fees::UserFees;
+use crate::{casting::Cast, errors::VortexDexResult, safe_methods::SafeMath, utils::{constants::{EPOCH_DURATION, FUEL_START_TS, QUOTE_PRECISION_U64, THIRTY_DAY}, stats_utils::calculate_rolling_sum}};
+
+use super::{user::User, user_fees::UserFees};
 
 
 
@@ -66,6 +70,194 @@ pub struct UserStats {
 
 impl UserStats {
     pub const SIZE: usize = 240;
+
+    pub fn get_fuel_bonus_numerator(
+        self,
+        last_fuel_bonus_update_ts: i64,
+        now: i64,
+    ) -> VortexDexResult<i64> {
+        if last_fuel_bonus_update_ts != 0 {
+            let since_last = now.safe_sub(last_fuel_bonus_update_ts)?;
+            return Ok(since_last);
+        }
+
+        Ok(0)
+    }
+
+    pub fn update_fuel_bonus_trade(&mut self, fuel_taker: u32, fuel_maker: u32) -> VortexDexResult {
+        self.fuel_taker = self.fuel_taker.saturating_add(fuel_taker);
+        self.fuel_maker = self.fuel_maker.saturating_add(fuel_maker);
+
+        Ok(())
+    }
+
+    pub fn update_fuel_bonus(
+        &mut self,
+        user: &mut User,
+        fuel_deposits: u32,
+        fuel_borrows: u32,
+        fuel_positions: u32,
+        now: i64,
+    ) -> VortexDexResult {
+        if  now > FUEL_START_TS {
+            self.fuel_deposits = self.fuel_deposits.saturating_add(fuel_deposits);
+            self.fuel_borrows = self.fuel_borrows.saturating_add(fuel_borrows);
+            self.fuel_positions = self.fuel_positions.saturating_add(fuel_positions);
+
+     
+        }
+
+        Ok(())
+    }
+
+    pub fn update_fuel_maker_bonus(
+        &mut self,
+        fuel_boost: u8,
+        quote_asset_amount: u64,
+    ) -> VortexDexResult {
+        if fuel_boost > 0 {
+            self.fuel_maker = self.fuel_maker.saturating_add(
+                fuel_boost
+                    .cast::<u64>()?
+                    .saturating_mul(quote_asset_amount / QUOTE_PRECISION_U64)
+                    .cast::<u32>()
+                    .unwrap_or(u32::MAX),
+            ); // todo of ratio
+        }
+        Ok(())
+    }
+
+    pub fn update_fuel_taker_bonus(
+        &mut self,
+        fuel_boost: u8,
+        quote_asset_amount: u64,
+    ) -> VortexDexResult {
+        if fuel_boost > 0 {
+            self.fuel_taker = self.fuel_taker.saturating_add(
+                fuel_boost
+                    .cast::<u64>()?
+                    .saturating_mul(quote_asset_amount / QUOTE_PRECISION_U64)
+                    .cast::<u32>()
+                    .unwrap_or(u32::MAX),
+            ); // todo of ratio
+        }
+        Ok(())
+    }
+
+    pub fn update_maker_volume_30d(
+        &mut self,
+        fuel_boost: u8,
+        quote_asset_amount: u64,
+        now: i64,
+    ) -> VortexDexResult {
+        let since_last = max(1_i64, now.safe_sub(self.last_maker_volume_30d_ts)?);
+
+        self.update_fuel_maker_bonus(fuel_boost, quote_asset_amount)?;
+
+        self.maker_volume_30d = calculate_rolling_sum(
+            self.maker_volume_30d,
+            quote_asset_amount,
+            since_last,
+            THIRTY_DAY,
+        )?;
+        self.last_maker_volume_30d_ts = now;
+
+        Ok(())
+    }
+
+    pub fn update_taker_volume_30d(
+        &mut self,
+        fuel_boost: u8,
+        quote_asset_amount: u64,
+        now: i64,
+    ) -> VortexDexResult {
+        let since_last = max(1_i64, now.safe_sub(self.last_taker_volume_30d_ts)?);
+
+        self.update_fuel_taker_bonus(fuel_boost, quote_asset_amount)?;
+
+        self.taker_volume_30d = calculate_rolling_sum(
+            self.taker_volume_30d,
+            quote_asset_amount,
+            since_last,
+            THIRTY_DAY,
+        )?;
+        self.last_taker_volume_30d_ts = now;
+
+        Ok(())
+    }
+
+    pub fn update_filler_volume(&mut self, quote_asset_amount: u64, now: i64) -> VortexDexResult {
+        let since_last = max(1_i64, now.safe_sub(self.last_filler_volume_30d_ts)?);
+
+        self.filler_volume_30d = calculate_rolling_sum(
+            self.filler_volume_30d,
+            quote_asset_amount,
+            since_last,
+            THIRTY_DAY,
+        )?;
+
+        self.last_filler_volume_30d_ts = now;
+
+        Ok(())
+    }
+
+    pub fn increment_total_fees(&mut self, fee: u64) -> VortexDexResult {
+        self.fees.total_fee_paid = self.fees.total_fee_paid.safe_add(fee)?;
+
+        Ok(())
+    }
+
+    pub fn increment_total_rebate(&mut self, fee: u64) -> VortexDexResult {
+        self.fees.total_fee_rebate = self.fees.total_fee_rebate.safe_add(fee)?;
+
+        Ok(())
+    }
+
+    pub fn increment_total_referrer_reward(&mut self, reward: u64, now: i64) -> VortexDexResult {
+        self.fees.total_referrer_reward = self.fees.total_referrer_reward.safe_add(reward)?;
+
+        self.fees.current_epoch_referrer_reward =
+            self.fees.current_epoch_referrer_reward.safe_add(reward)?;
+
+        if now > self.next_epoch_ts {
+            let n_epoch_durations = now
+                .safe_sub(self.next_epoch_ts)?
+                .safe_div(EPOCH_DURATION)?
+                .safe_add(1)?;
+
+            self.next_epoch_ts = self
+                .next_epoch_ts
+                .safe_add(EPOCH_DURATION.safe_mul(n_epoch_durations)?)?;
+
+            self.fees.current_epoch_referrer_reward = 0;
+        }
+
+        Ok(())
+    }
+
+    pub fn increment_total_referee_discount(&mut self, discount: u64) -> VortexDexResult {
+        self.fees.total_referee_discount = self.fees.total_referee_discount.safe_add(discount)?;
+
+        Ok(())
+    }
+
+    pub fn has_referrer(&self) -> bool {
+        false
+    }
+
+    pub fn get_total_30d_volume(&self) -> VortexDexResult<u64> {
+        self.taker_volume_30d.safe_add(self.maker_volume_30d)
+    }
+
+    pub fn get_age_ts(&self, now: i64) -> i64 {
+        // upper bound of age of the user stats account
+        let min_action_ts: i64 = self
+            .last_filler_volume_30d_ts
+            .min(self.last_maker_volume_30d_ts)
+            .min(self.last_taker_volume_30d_ts);
+        now.saturating_sub(min_action_ts).max(0)
+    }
+
 }
 
 impl Default for UserStats {

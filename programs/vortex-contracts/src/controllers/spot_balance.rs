@@ -2,7 +2,7 @@ use std::cmp::max;
 
 use anchor_lang::emit;
 
-use crate::{errors::{DexError, VortexDexResult}, state::{dex_state::ValidityGuardRails, events::SpotInterestRecord, operations::SpotOperation, oracle::OraclePriceData, spot_market::{SpotBalance, SpotBalanceType, SpotMarket}, user::MarketType}, utils::{constants::{FIVE_MINUTE, IF_FACTOR_PRECISION, ONE_HOUR, QUOTE_SPOT_MARKET_INDEX, SPOT_MARKET_TOKEN_TWAP_WINDOW}, market_maker_utils::sanitize_new_price, oracle_utils::{is_oracle_valid_for_action, oracle_validity, VortexDexAction}, spot_market_utils::{calculate_accumulated_interest, calculate_utilization, get_interest_token_amount, get_spot_balance, get_token_amount, InterestAccumulated}, stats_utils::{calculate_new_twap, calculate_weighted_average}}, validate};
+use crate::{casting::Cast, errors::{DexError, VortexDexResult}, safe_methods::SafeMath, state::{dex_state::ValidityGuardRails, events::SpotInterestRecord, operations::SpotOperation, oracle::OraclePriceData, spot_market::{SpotBalance, SpotBalanceType, SpotMarket}, user::MarketType}, utils::{constants::{FIVE_MINUTE, IF_FACTOR_PRECISION, ONE_HOUR, QUOTE_SPOT_MARKET_INDEX, SPOT_MARKET_TOKEN_TWAP_WINDOW}, market_maker_utils::sanitize_new_price, oracle_utils::{is_oracle_valid_for_action, oracle_validity, VortexDexAction}, spot_market_utils::{calculate_accumulated_interest, calculate_utilization, get_interest_token_amount, get_spot_balance, get_token_amount, InterestAccumulated}, stats_utils::{calculate_new_twap, calculate_weighted_average}}, validate};
 
 
 pub fn update_spot_market_twap_stats(

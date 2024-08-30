@@ -1,5 +1,5 @@
 use anchor_lang::prelude::*;
-use serum_dex::error::DexError;
+use crate::errors::DexError;
 use solana_program::msg;
 
 use crate::{errors::VortexDexResult, validate};

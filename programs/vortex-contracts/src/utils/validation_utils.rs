@@ -41,11 +41,6 @@ pub fn validate_user_deletion(
     state: &DexState,
     now: i64,
 ) -> VortexDexResult {
-    validate!(
-        !user_stats.is_referrer || user.sub_account_id != 0,
-        DexError::UserCantBeDeleted,
-        "user id 0 cant be deleted if user is a referrer"
-    )?;
 
     validate!(
         !user.is_bankrupt(),
@@ -58,15 +53,6 @@ pub fn validate_user_deletion(
         DexError::UserCantBeDeleted,
         "user being liquidated"
     )?;
-
-    for perp_position in &user.perp_positions {
-        validate!(
-            perp_position.is_available(),
-            DexError::UserCantBeDeleted,
-            "user has perp position for market {}",
-            perp_position.market_index
-        )?;
-    }
 
     for spot_position in &user.spot_positions {
         validate!(

@@ -36,6 +36,7 @@ pub struct DexState {
     pub srm_vault: Pubkey,
     pub perp_fee_structure: FeeStructure,
     pub spot_fee_structure: FeeStructure,
+    pub oracle_guard_rails: OracleGuardRails,
     pub number_of_authorities: u64,
     pub number_of_sub_accounts: u64,
     pub lp_cooldown_time: u64,

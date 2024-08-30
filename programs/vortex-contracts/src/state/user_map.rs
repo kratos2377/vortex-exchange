@@ -1,7 +1,7 @@
 use std::{cell::{Ref, RefMut}, collections::BTreeMap, iter::Peekable, panic::Location, slice::Iter};
-use anchor_lang::prelude::*;
+use anchor_lang::{prelude::*, Discriminator};
 use arrayref::array_ref;
-use crate::{errors::VortexDexResult, validate};
+use crate::{errors::{DexError, VortexDexResult}, safe_methods::SafeUnwrap, validate};
 
 use super::{user::User, user_stats::UserStats};
 
@@ -21,7 +21,7 @@ impl<'a> UserMap<'a> {
                     caller.file(),
                     caller.line()
                 );
-                return Err(ErrorCode::UserNotFound);
+                return Err(DexError::UserNotFound);
             }
         };
 
@@ -36,7 +36,7 @@ impl<'a> UserMap<'a> {
                     caller.file(),
                     caller.line()
                 );
-                Err(ErrorCode::UnableToLoadUserAccount)
+                Err(DexError::UnableToLoadUserAccount)
             }
         }
     }
@@ -54,7 +54,7 @@ impl<'a> UserMap<'a> {
                     caller.file(),
                     caller.line()
                 );
-                return Err(ErrorCode::UserNotFound);
+                return Err(DexError::UserNotFound);
             }
         };
 
@@ -69,7 +69,7 @@ impl<'a> UserMap<'a> {
                     caller.file(),
                     caller.line()
                 );
-                Err(ErrorCode::UnableToLoadUserAccount)
+                Err(DexError::UnableToLoadUserAccount)
             }
         }
     }
@@ -77,7 +77,7 @@ impl<'a> UserMap<'a> {
     pub fn insert(&mut self, user: Pubkey, account_loader: AccountLoader<'a, User>) -> VortexDexResult {
         validate!(
             !self.0.contains_key(&user),
-            ErrorCode::InvalidUserAccount,
+            DexError::InvalidUserAccount,
             "User already exists in map {:?}",
             user
         )?;
@@ -109,7 +109,7 @@ impl<'a> UserStatsMap<'a> {
                     caller.file(),
                     caller.line()
                 );
-                return Err(ErrorCode::UserStatsNotFound);
+                return Err(DexError::UserStatsNotFound);
             }
         };
 
@@ -124,7 +124,7 @@ impl<'a> UserStatsMap<'a> {
                     caller.file(),
                     caller.line()
                 );
-                Err(ErrorCode::UnableToLoadUserStatsAccount)
+                Err(DexError::UnableToLoadUserStatsAccount)
             }
         }
     }
@@ -142,7 +142,7 @@ impl<'a> UserStatsMap<'a> {
                     caller.file(),
                     caller.line()
                 );
-                return Err(ErrorCode::UserStatsNotFound);
+                return Err(DexError::UserStatsNotFound);
             }
         };
 
@@ -157,7 +157,7 @@ impl<'a> UserStatsMap<'a> {
                     caller.file(),
                     caller.line()
                 );
-                Err(ErrorCode::UnableToLoadUserStatsAccount)
+                Err(DexError::UnableToLoadUserStatsAccount)
             }
         }
     }
@@ -169,7 +169,7 @@ impl<'a> UserStatsMap<'a> {
     ) -> VortexDexResult {
         validate!(
             !self.0.contains_key(&authority),
-            ErrorCode::InvalidUserStatsAccount,
+            DexError::InvalidUserStatsAccount,
             "User stats already exists in map {:?}",
             authority
         )?;
@@ -199,7 +199,7 @@ pub fn load_user_maps<'a: 'b, 'b>(
 
         let data = user_account_info
             .try_borrow_data()
-            .or(Err(ErrorCode::CouldNotLoadUserData))?;
+            .or(Err(DexError::CouldNotLoadUserData))?;
 
         let expected_data_len = User::SIZE;
         if data.len() < expected_data_len {
@@ -215,33 +215,33 @@ pub fn load_user_maps<'a: 'b, 'b>(
 
         let is_writable = user_account_info.is_writable;
         if !is_writable && must_be_writable {
-            return Err(ErrorCode::UserWrongMutability);
+            return Err(DexError::UserWrongMutability);
         }
 
         let user_account_loader: AccountLoader<User> =
-            AccountLoader::try_from(user_account_info).or(Err(ErrorCode::InvalidUserAccount))?;
+            AccountLoader::try_from(user_account_info).or(Err(DexError::InvalidUserAccount))?;
 
         user_map.0.insert(*user_key, user_account_loader);
 
         validate!(
             account_info_iter.peek().is_some(),
-            ErrorCode::UserStatsNotFound
+            DexError::UserStatsNotFound
         )?;
 
         let user_stats_account_info = account_info_iter.peek().safe_unwrap()?;
 
         let data = user_stats_account_info
             .try_borrow_data()
-            .or(Err(ErrorCode::CouldNotLoadUserStatsData))?;
+            .or(Err(DexError::CouldNotLoadUserStatsData))?;
 
         let expected_data_len = UserStats::SIZE;
         if data.len() < expected_data_len {
-            return Err(ErrorCode::InvalidUserStatsAccount);
+            return Err(DexError::InvalidUserStatsAccount);
         }
 
         let account_discriminator = array_ref![data, 0, 8];
         if account_discriminator != &user_stats_discriminator {
-            return Err(ErrorCode::InvalidUserStatsAccount);
+            return Err(DexError::InvalidUserStatsAccount);
         }
 
         let authority_slice = array_ref![data, 8, 32];
@@ -255,12 +255,12 @@ pub fn load_user_maps<'a: 'b, 'b>(
 
         let is_writable = user_stats_account_info.is_writable;
         if !is_writable && must_be_writable {
-            return Err(ErrorCode::UserStatsWrongMutability);
+            return Err(DexError::UserStatsWrongMutability);
         }
 
         let user_stats_account_loader: AccountLoader<UserStats> =
             AccountLoader::try_from(user_stats_account_info)
-                .or(Err(ErrorCode::InvalidUserStatsAccount))?;
+                .or(Err(DexError::InvalidUserStatsAccount))?;
 
         user_stats_map.insert(authority, user_stats_account_loader)?;
     }
@@ -281,7 +281,7 @@ pub fn load_user_map<'a: 'b, 'b>(
 
         let data = user_account_info
             .try_borrow_data()
-            .or(Err(ErrorCode::CouldNotLoadUserData))?;
+            .or(Err(DexError::CouldNotLoadUserData))?;
 
         let expected_user_data_len = User::SIZE;
         let expected_user_stats_len = UserStats::SIZE;
@@ -305,11 +305,11 @@ pub fn load_user_map<'a: 'b, 'b>(
 
         let is_writable = user_account_info.is_writable;
         if !is_writable && must_be_writable {
-            return Err(ErrorCode::UserWrongMutability);
+            return Err(DexError::UserWrongMutability);
         }
 
         let user_account_loader: AccountLoader<User> =
-            AccountLoader::try_from(user_account_info).or(Err(ErrorCode::InvalidUserAccount))?;
+            AccountLoader::try_from(user_account_info).or(Err(DexError::InvalidUserAccount))?;
 
         user_map.0.insert(*user_key, user_account_loader);
     }

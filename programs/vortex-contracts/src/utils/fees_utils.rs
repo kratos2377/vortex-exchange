@@ -1,8 +1,9 @@
 use std::cmp::{max, min};
 
-use serum_dex::error::DexError;
 
-use crate::{errors::VortexDexResult, state::{dex_state::{FeeStructure, FeeTier, OrderFillerRewardStructure}, user::MarketType, user_stats::UserStats}, validate};
+use num_integer::Roots;
+
+use crate::{casting::Cast, errors::{DexError, VortexDexResult}, safe_methods::SafeMath, state::{dex_state::{FeeStructure, FeeTier, OrderFillerRewardStructure}, user::MarketType, user_stats::UserStats}, validate};
 
 use super::{constants::{FEE_ADJUSTMENT_MAX, FEE_DENOMINATOR, FEE_PERCENTAGE_DENOMINATOR, OPEN_ORDER_MARGIN_REQUIREMENT, TEN_BPS}, fuel_utils::ExternalFillFees, helper_utils::get_proportion_u128};
 

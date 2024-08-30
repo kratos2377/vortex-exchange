@@ -1,7 +1,9 @@
+use std::ops::Sub;
+
 use anchor_lang::prelude::Pubkey;
 use solana_program::msg;
 
-use crate::{errors::{DexError, VortexDexResult}, math_error, print_error, state::{fulfillment::SpotFulfillmentMethod, margin_calculation::{MarginCalculation, MarginContext}, oracle::StrictOraclePrice, oracle_map::OracleMap, position::PositionDirection, spot_market::SpotMarket, spot_market_map::SpotMarketMap, user::{MarketType, Order, OrderFillSimulation, OrderStatus, OrderTriggerCondition, OrderType, User}}, validate};
+use crate::{casting::Cast, errors::{DexError, VortexDexResult}, math_error, print_error, safe_methods::SafeMath, state::{fulfillment::SpotFulfillmentMethod, margin_calculation::{MarginCalculation, MarginContext}, oracle::StrictOraclePrice, oracle_map::OracleMap, position::PositionDirection, spot_market::SpotMarket, spot_market_map::SpotMarketMap, user::{MarketType, Order, OrderFillSimulation, OrderStatus, OrderTriggerCondition, OrderType, User}}, validate};
 
 use super::{constants::{MARGIN_PRECISION_U128, OPEN_ORDER_MARGIN_REQUIREMENT, PERCENTAGE_PRECISION, PERCENTAGE_PRECISION_U64, PRICE_PRECISION_I128, QUOTE_PRECISION_I128, SPOT_WEIGHT_PRECISION, SPOT_WEIGHT_PRECISION_I128}, margin_utils::{calculate_margin_requirement_and_total_collateral_and_liability_info, MarginRequirementType}, matching_utils::do_orders_cross, spot_market_utils::{get_max_withdraw_for_market_with_token_amount, get_strict_token_value}};
 
@@ -1172,3 +1174,4 @@ pub fn order_satisfies_trigger_condition(order: &Order, oracle_price: u64) -> Vo
         _ => Err(print_error!(DexError::InvalidTriggerOrderCondition)()),
     }
 }
+

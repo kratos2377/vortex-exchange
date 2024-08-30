@@ -1,7 +1,8 @@
 
 
-use crate::errors::VortexDexResult;
+use crate::errors::{DexError, VortexDexResult};
 use crate::instructions::executors::SpotFulfillmentType;
+use crate::safe_methods::{SafeMath, SafeUnwrap};
 use crate::state::dex_state::DexState;
 use crate::state::events::OrderActionExplanation;
 use crate::state::position::PositionDirection;
@@ -65,19 +66,19 @@ impl<'a, 'b> SerumContext<'a, 'b> {
     pub fn load_serum_market(&self) -> VortexDexResult<Market> {
         Market::load(self.serum_market, self.serum_program.key, false).map_err(|e| {
             msg!("{:?}", e);
-            ErrorCode::InvalidSerumMarket
+            DexError::InvalidSerumMarket
         })
     }
 
     pub fn load_open_orders(&self) -> VortexDexResult<Ref<'a, serum_dex::state::OpenOrders>> {
         validate!(
             self.serum_open_orders.data_len() >= 12,
-            ErrorCode::InvalidSerumOpenOrders
+            DexError::InvalidSerumOpenOrders
         )?;
         let unpadded_data: Ref<[u8]> = Ref::map(
             self.serum_open_orders
                 .try_borrow_data()
-                .map_err(|_e| ErrorCode::InvalidSerumOpenOrders)?,
+                .map_err(|_e| DexError::InvalidSerumOpenOrders)?,
             |data| {
                 let data_len = data.len() - 12;
                 let (_, rest) = data.split_at(5);
@@ -119,7 +120,7 @@ impl<'a, 'b> SerumContext<'a, 'b> {
         solana_program::program::invoke_signed(&instruction, &account_infos, signers_seeds).map_err(
             |e| {
                 msg!("{:?}", e);
-                ErrorCode::FailedSerumCPI
+                DexError::FailedSerumCPI
             },
         )
     }
@@ -133,30 +134,30 @@ impl<'a, 'b> SerumContext<'a, 'b> {
         let market_state_event_queue = market_state.event_q;
         let serum_event_queue =
             Pubkey::try_from_slice(cast_slice::<u64, u8>(&market_state_event_queue))
-                .map_err(|_| ErrorCode::InvalidSerumMarket)?;
+                .map_err(|_| DexError::InvalidSerumMarket)?;
 
         let market_state_request_queue = market_state.req_q;
         let serum_request_queue =
             Pubkey::try_from_slice(cast_slice::<u64, u8>(&market_state_request_queue))
-                .map_err(|_| ErrorCode::InvalidSerumMarket)?;
+                .map_err(|_| DexError::InvalidSerumMarket)?;
 
         let market_state_bids = market_state.bids;
         let serum_bids = Pubkey::try_from_slice(cast_slice::<u64, u8>(&market_state_bids))
-            .map_err(|_| ErrorCode::InvalidSerumMarket)?;
+            .map_err(|_| DexError::InvalidSerumMarket)?;
 
         let market_state_asks = market_state.asks;
         let serum_asks = Pubkey::try_from_slice(cast_slice::<u64, u8>(&market_state_asks))
-            .map_err(|_| ErrorCode::InvalidSerumMarket)?;
+            .map_err(|_| DexError::InvalidSerumMarket)?;
 
         let market_state_coin_vault = market_state.coin_vault;
         let serum_base_vault =
             Pubkey::try_from_slice(cast_slice::<u64, u8>(&market_state_coin_vault))
-                .map_err(|_| ErrorCode::InvalidSerumMarket)?;
+                .map_err(|_| DexError::InvalidSerumMarket)?;
 
         let market_state_pc_vault = market_state.pc_vault;
         let serum_quote_vault =
             Pubkey::try_from_slice(cast_slice::<u64, u8>(&market_state_pc_vault))
-                .map_err(|_| ErrorCode::InvalidSerumMarket)?;
+                .map_err(|_| DexError::InvalidSerumMarket)?;
         let serum_signer_nonce = market_state.vault_signer_nonce;
 
         Ok(SerumV3FulfillmentConfig {
@@ -224,23 +225,23 @@ impl<'a, 'b> SerumFulfillmentParams<'a, 'b> {
         let serum_fulfillment_config_loader: AccountLoader<SerumV3FulfillmentConfig> =
             AccountLoader::try_from(serum_fulfillment_config).map_err(|e| {
                 msg!("{:?}", e);
-                ErrorCode::InvalidFulfillmentConfig
+                DexError::InvalidFulfillmentConfig
             })?;
         let serum_fulfillment_config = load!(serum_fulfillment_config_loader)?;
 
         validate!(
             serum_fulfillment_config.status == SpotFulfillmentConfigStatus::Enabled,
-            ErrorCode::SpotFulfillmentConfigDisabled
+            DexError::SpotFulfillmentConfigDisabled
         )?;
 
         validate!(
             &state.signer == vortex_signer.key,
-            ErrorCode::InvalidFulfillmentConfig
+            DexError::InvalidFulfillmentConfig
         )?;
 
         validate!(
             serum_fulfillment_config.market_index == base_market.market_index,
-            ErrorCode::InvalidFulfillmentConfig,
+            DexError::InvalidFulfillmentConfig,
             "config market index {} does not equal base asset index {}",
             serum_fulfillment_config.market_index,
             base_market.market_index
@@ -248,48 +249,48 @@ impl<'a, 'b> SerumFulfillmentParams<'a, 'b> {
 
         validate!(
             &base_market.vault == base_market_vault.key,
-            ErrorCode::InvalidFulfillmentConfig
+            DexError::InvalidFulfillmentConfig
         )?;
 
         validate!(
             &quote_market.vault == quote_market_vault.key,
-            ErrorCode::InvalidFulfillmentConfig
+            DexError::InvalidFulfillmentConfig
         )?;
 
         validate!(
             &serum_fulfillment_config.serum_program_id == serum_program.key,
-            ErrorCode::InvalidFulfillmentConfig
+            DexError::InvalidFulfillmentConfig
         )?;
 
         validate!(
             &serum_fulfillment_config.serum_market == serum_market.key,
-            ErrorCode::InvalidFulfillmentConfig
+            DexError::InvalidFulfillmentConfig
         )?;
 
         validate!(
             &serum_fulfillment_config.serum_open_orders == serum_open_orders.key,
-            ErrorCode::InvalidFulfillmentConfig
+            DexError::InvalidFulfillmentConfig
         )?;
 
         let base_market_vault: Box<Account<TokenAccount>> =
             Box::new(Account::try_from(base_market_vault).map_err(|e| {
                 msg!("{:?}", e);
-                ErrorCode::InvalidFulfillmentConfig
+                DexError::InvalidFulfillmentConfig
             })?);
         let quote_market_vault: Box<Account<TokenAccount>> =
             Box::new(Account::try_from(quote_market_vault).map_err(|e| {
                 msg!("{:?}", e);
-                ErrorCode::InvalidFulfillmentConfig
+                DexError::InvalidFulfillmentConfig
             })?);
 
         let token_program: Program<Token> = Program::try_from(*token_program).map_err(|e| {
             msg!("{:?}", e);
-            ErrorCode::InvalidFulfillmentConfig
+            DexError::InvalidFulfillmentConfig
         })?;
 
         validate!(
             &state.srm_vault == srm_vault.key,
-            ErrorCode::InvalidFulfillmentConfig
+            DexError::InvalidFulfillmentConfig
         )?;
 
         Ok(SerumFulfillmentParams {
@@ -380,7 +381,7 @@ impl<'a, 'b> SerumFulfillmentParams<'a, 'b> {
             )
             .map_err(|e| {
                 msg!("{:?}", e);
-                ErrorCode::FailedSerumCPI
+                DexError::FailedSerumCPI
             })
         } else {
             let account_infos = [
@@ -408,7 +409,7 @@ impl<'a, 'b> SerumFulfillmentParams<'a, 'b> {
             )
             .map_err(|e| {
                 msg!("{:?}", e);
-                ErrorCode::FailedSerumCPI
+                DexError::FailedSerumCPI
             })
         }
     }
@@ -455,7 +456,7 @@ impl<'a, 'b> SerumFulfillmentParams<'a, 'b> {
         )
         .map_err(|e| {
             msg!("{:?}", e);
-            ErrorCode::FailedSerumCPI
+            DexError::FailedSerumCPI
         })
     }
 }
@@ -470,12 +471,12 @@ impl<'a, 'b> SpotFulfillmentParams for SerumFulfillmentParams<'a, 'b> {
 
         let mut bids = market.load_bids_mut(self.serum_bids).map_err(|e| {
             msg!("{:?}", e);
-            ErrorCode::InvalidSerumBids
+            DexError::InvalidSerumBids
         })?;
 
         let mut asks = market.load_asks_mut(self.serum_asks).map_err(|e| {
             msg!("{:?}", e);
-            ErrorCode::InvalidSerumAsks
+            DexError::InvalidSerumAsks
         })?;
 
         let order_book_state = OrderBookState {
@@ -605,11 +606,11 @@ impl<'a, 'b> SpotFulfillmentParams for SerumFulfillmentParams<'a, 'b> {
 
         self.base_market_vault.reload().map_err(|_e| {
             msg!("Failed to reload base_market_vault");
-            ErrorCode::FailedSerumCPI
+            DexError::FailedSerumCPI
         })?;
         self.quote_market_vault.reload().map_err(|_e| {
             msg!("Failed to reload quote_market_vault");
-            ErrorCode::FailedSerumCPI
+            DexError::FailedSerumCPI
         })?;
 
         let base_after = self.base_market_vault.amount;

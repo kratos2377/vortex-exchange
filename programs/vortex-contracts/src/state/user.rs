@@ -1,11 +1,11 @@
-use std::{fmt, ops::Neg};
+use std::{fmt, ops::Neg, panic::Location};
 use anchor_lang::prelude::*;
 
 use borsh::{BorshDeserialize, BorshSerialize};
 
-use crate::{casting::Cast, errors::{DexError, VortexDexResult}, get_then_update_id, instructions::constraints::{can_sign_for_user, is_stats_for_user}, safe_increment, safe_methods::SafeMath, utils::{constants::{FUEL_START_TS, OPEN_ORDER_MARGIN_REQUIREMENT, QUOTE_PRECISION_U64, QUOTE_SPOT_MARKET_INDEX}, margin_utils::{calculate_margin_requirement_and_total_collateral_and_liability_info, validate_any_isolated_tier_requirements}, spot_market_utils::{get_signed_token_amount, get_strict_token_value, get_token_amount, get_token_value}}, validate};
+use crate::{casting::Cast, errors::{DexError, VortexDexResult}, get_then_update_id, instructions::constraints::{can_sign_for_user, is_stats_for_user}, safe_increment, safe_methods::SafeMath, utils::{auction_utils::{calculate_auction_price, is_auction_complete}, constants::{FUEL_START_TS, OPEN_ORDER_MARGIN_REQUIREMENT, QUOTE_PRECISION_U64, QUOTE_SPOT_MARKET_INDEX}, margin_utils::{calculate_margin_requirement_and_total_collateral_and_liability_info, validate_any_isolated_tier_requirements}, order_utils::{standardize_base_asset_amount, standardize_price}, spot_market_utils::{get_signed_token_amount, get_strict_token_value, get_token_amount, get_token_value}}, validate};
 
-use super::{margin_calculation::{MarginCalculation, MarginContext}, oracle::StrictOraclePrice, oracle_map::OracleMap, position::PositionDirection, spot_market::{SpotBalanceType, SpotMarket}, spot_market_map::SpotMarketMap, user_stats::UserStats};
+use super::{margin_calculation::{MarginCalculation, MarginContext}, oracle::StrictOraclePrice, oracle_map::OracleMap, position::PositionDirection, spot_market::{SpotBalance, SpotBalanceType, SpotMarket}, spot_market_map::SpotMarketMap, user_stats::UserStats};
 use crate::utils::{constants::{SPOT_WEIGHT_PRECISION, SPOT_WEIGHT_PRECISION_I128}, margin_utils::MarginRequirementType};
 
 
@@ -31,7 +31,7 @@ pub struct User {
     pub total_deposits: u64,
     pub total_withdraws: u64,
     pub status: u8,
-
+    pub total_social_loss: u64,
     pub cumulative_spot_fees: i64,
     pub cumulative_perp_funding: i64,
     pub liquidation_margin_freed: u64,
@@ -213,11 +213,11 @@ impl User {
         Ok(())
     }
 
-    // pub fn increment_total_socialized_loss(&mut self, value: u64) -> VortexDexResult {
-    //     self.total_social_loss = self.total_social_loss.saturating_add(value);
+    pub fn increment_total_socialized_loss(&mut self, value: u64) -> VortexDexResult {
+        self.total_social_loss = self.total_social_loss.saturating_add(value);
 
-    //     Ok(())
-    // }
+        Ok(())
+    }
 
     pub fn update_cumulative_spot_fees(&mut self, amount: i64) -> VortexDexResult {
         safe_increment!(self.cumulative_spot_fees, amount);
@@ -587,6 +587,36 @@ impl SpotPosition {
     }
 }
 
+
+impl SpotBalance for SpotPosition {
+    fn market_index(&self) -> u16 {
+        self.market_index
+    }
+
+    fn balance_type(&self) -> &SpotBalanceType {
+        &self.balance_type
+    }
+
+    fn balance(&self) -> u128 {
+        self.scaled_balance as u128
+    }
+
+    fn increase_balance(&mut self, delta: u128) -> VortexDexResult {
+        self.scaled_balance = self.scaled_balance.safe_add(delta.cast()?)?;
+        Ok(())
+    }
+
+    fn decrease_balance(&mut self, delta: u128) -> VortexDexResult {
+        self.scaled_balance = self.scaled_balance.safe_sub(delta.cast()?)?;
+        Ok(())
+    }
+
+    fn update_balance_type(&mut self, balance_type: SpotBalanceType) -> VortexDexResult {
+        self.balance_type = balance_type;
+        Ok(())
+    }
+}
+
 #[zero_copy(unsafe)]
 #[derive(Default, Eq, PartialEq, Debug , BorshDeserialize , BorshSerialize)]
 #[repr(C)]
@@ -683,6 +713,256 @@ pub struct Order {
     pub padding: [u8; 3],
 }
 
+impl Default for Order {
+    fn default() -> Self {
+        Self {
+            status: OrderStatus::Init,
+            order_type: OrderType::Limit,
+            market_type: MarketType::Spot,
+            slot: 0,
+            order_id: 0,
+            user_order_id: 0,
+            market_index: 0,
+            price: 0,
+            existing_position_direction: PositionDirection::Long,
+            base_asset_amount: 0,
+            base_asset_amount_filled: 0,
+            quote_asset_amount_filled: 0,
+            direction: PositionDirection::Long,
+            reduce_only: false,
+            post_only: false,
+            immediate_or_cancel: false,
+            trigger_price: 0,
+            trigger_condition: OrderTriggerCondition::Above,
+            oracle_price_offset: 0,
+            auction_start_price: 0,
+            auction_end_price: 0,
+            auction_duration: 0,
+            max_ts: 0,
+            padding: [0; 3],
+        }
+    }
+}
+
+
+impl Order {
+    pub fn seconds_til_expiry(self, now: i64) -> i64 {
+        (self.max_ts - now).max(0)
+    }
+
+    pub fn has_oracle_price_offset(self) -> bool {
+        self.oracle_price_offset != 0
+    }
+
+    pub fn get_limit_price(
+        &self,
+        valid_oracle_price: Option<i64>,
+        fallback_price: Option<u64>,
+        slot: u64,
+        tick_size: u64,
+    ) -> VortexDexResult<Option<u64>> {
+        let price = if self.has_auction_price(self.slot, self.auction_duration, slot)? {
+            Some(calculate_auction_price(
+                self,
+                slot,
+                tick_size,
+                valid_oracle_price,
+            )?)
+        } else if self.has_oracle_price_offset() {
+            let oracle_price = valid_oracle_price.ok_or_else(|| {
+                msg!("Could not find oracle too calculate oracle offset limit price");
+                DexError::OracleNotFound
+            })?;
+
+            let limit_price = oracle_price
+                .safe_add(self.oracle_price_offset.cast()?)?
+                .max(tick_size.cast()?);
+
+            Some(standardize_price(
+                limit_price.cast::<u64>()?,
+                tick_size,
+                self.direction,
+            )?)
+        } else if self.price == 0 {
+            match fallback_price {
+                Some(price) => Some(standardize_price(price, tick_size, self.direction)?),
+                None => None,
+            }
+        } else {
+            Some(self.price)
+        };
+
+        Ok(price)
+    }
+
+    #[track_caller]
+    #[inline(always)]
+    pub fn force_get_limit_price(
+        &self,
+        valid_oracle_price: Option<i64>,
+        fallback_price: Option<u64>,
+        slot: u64,
+        tick_size: u64,
+    ) -> VortexDexResult<u64> {
+        match self.get_limit_price(valid_oracle_price, fallback_price, slot, tick_size)? {
+            Some(price) => Ok(price),
+            None => {
+                let caller = Location::caller();
+                msg!(
+                    "Could not get limit price at {}:{}",
+                    caller.file(),
+                    caller.line()
+                );
+                Err(DexError::UnableToGetLimitPrice)
+            }
+        }
+    }
+
+    pub fn has_limit_price(self, slot: u64) -> VortexDexResult<bool> {
+        Ok(self.price > 0
+            || self.has_oracle_price_offset()
+            || !is_auction_complete(self.slot, self.auction_duration, slot)?)
+    }
+
+    pub fn is_auction_complete(self, slot: u64) -> VortexDexResult<bool> {
+        is_auction_complete(self.slot, self.auction_duration, slot)
+    }
+
+    pub fn has_auction(&self) -> bool {
+        self.auction_duration != 0
+    }
+
+    pub fn has_auction_price(
+        &self,
+        order_slot: u64,
+        auction_duration: u8,
+        slot: u64,
+    ) -> VortexDexResult<bool> {
+        let auction_complete = is_auction_complete(order_slot, auction_duration, slot)?;
+        let has_auction_prices = self.auction_start_price != 0 || self.auction_end_price != 0;
+        Ok(!auction_complete && has_auction_prices)
+    }
+
+    /// Passing in an existing_position forces the function to consider the order's reduce only status
+    pub fn get_base_asset_amount_unfilled(
+        &self,
+        existing_position: Option<i64>,
+    ) -> VortexDexResult<u64> {
+        let base_asset_amount_unfilled = self
+            .base_asset_amount
+            .safe_sub(self.base_asset_amount_filled)?;
+
+        let existing_position = match existing_position {
+            Some(existing_position) => existing_position,
+            None => {
+                return Ok(base_asset_amount_unfilled);
+            }
+        };
+
+        // if order is post only, can disregard reduce only
+        if !self.reduce_only || self.post_only {
+            return Ok(base_asset_amount_unfilled);
+        }
+
+        if existing_position == 0 {
+            return Ok(0);
+        }
+
+        match self.direction {
+            PositionDirection::Long => {
+                if existing_position > 0 {
+                    Ok(0)
+                } else {
+                    Ok(base_asset_amount_unfilled.min(existing_position.unsigned_abs()))
+                }
+            }
+            PositionDirection::Short => {
+                if existing_position < 0 {
+                    Ok(0)
+                } else {
+                    Ok(base_asset_amount_unfilled.min(existing_position.unsigned_abs()))
+                }
+            }
+        }
+    }
+
+    /// Stardardizes the base asset amount unfilled to the nearest step size
+    /// Particularly important for spot positions where existing position can be dust
+    pub fn get_standardized_base_asset_amount_unfilled(
+        &self,
+        existing_position: Option<i64>,
+        step_size: u64,
+    ) -> VortexDexResult<u64> {
+        standardize_base_asset_amount(
+            self.get_base_asset_amount_unfilled(existing_position)?,
+            step_size,
+        )
+    }
+
+    pub fn must_be_triggered(&self) -> bool {
+        matches!(
+            self.order_type,
+            OrderType::TriggerMarket | OrderType::TriggerLimit
+        )
+    }
+
+    pub fn triggered(&self) -> bool {
+        matches!(
+            self.trigger_condition,
+            OrderTriggerCondition::TriggeredAbove | OrderTriggerCondition::TriggeredBelow
+        )
+    }
+
+    pub fn is_jit_maker(&self) -> bool {
+        self.post_only && self.immediate_or_cancel
+    }
+
+    pub fn is_open_order_for_market(&self, market_index: u16, market_type: &MarketType) -> bool {
+        self.market_index == market_index
+            && self.status == OrderStatus::Open
+            && &self.market_type == market_type
+    }
+
+    pub fn get_spot_position_update_direction(&self, asset_type: AssetType) -> SpotBalanceType {
+        match (self.direction, asset_type) {
+            (PositionDirection::Long, AssetType::Base) => SpotBalanceType::Deposit,
+            (PositionDirection::Long, AssetType::Quote) => SpotBalanceType::Borrow,
+            (PositionDirection::Short, AssetType::Base) => SpotBalanceType::Borrow,
+            (PositionDirection::Short, AssetType::Quote) => SpotBalanceType::Deposit,
+        }
+    }
+
+    pub fn is_market_order(&self) -> bool {
+        matches!(
+            self.order_type,
+            OrderType::Market | OrderType::TriggerMarket | OrderType::Oracle
+        )
+    }
+
+    pub fn is_limit_order(&self) -> bool {
+        matches!(self.order_type, OrderType::Limit | OrderType::TriggerLimit)
+    }
+
+    pub fn is_resting_limit_order(&self, slot: u64) -> VortexDexResult<bool> {
+        if !self.is_limit_order() {
+            return Ok(false);
+        }
+
+        if self.order_type == OrderType::TriggerLimit {
+            return match self.direction {
+                PositionDirection::Long if self.trigger_price < self.price => {
+                    return Ok(false);
+                }
+                PositionDirection::Short if self.trigger_price > self.price => {
+                    return Ok(false);
+                }
+                _ => self.is_auction_complete(slot),
+            };
+        }
+
+        Ok(self.post_only || self.is_auction_complete(slot)?)
+    }
+}
 
 #[derive(Clone, Copy, BorshSerialize, BorshDeserialize, PartialEq, Eq, Debug)]
 pub enum OrderStatus {

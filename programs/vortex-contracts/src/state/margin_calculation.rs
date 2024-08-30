@@ -1,7 +1,7 @@
 use anchor_lang::{AnchorDeserialize, AnchorSerialize};
 use solana_program::msg;
 
-use crate::{errors::{DexError, VortexDexResult}, utils::{constants::MARGIN_PRECISION_U128, fuel_utils::calculate_spot_fuel_bonus, margin_utils::MarginRequirementType, spot_market_utils::get_strict_token_value}, validate};
+use crate::{casting::Cast, errors::{DexError, VortexDexResult}, safe_methods::SafeMath, utils::{constants::MARGIN_PRECISION_U128, fuel_utils::calculate_spot_fuel_bonus, margin_utils::MarginRequirementType, spot_market_utils::get_strict_token_value}, validate};
 
 use super::{oracle::StrictOraclePrice, spot_market::SpotMarket, user::{MarketType, User}};
 

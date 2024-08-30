@@ -1,10 +1,10 @@
 use std::{cell::{Ref, RefMut}, collections::{BTreeMap, BTreeSet}, iter::Peekable, panic::Location, slice::Iter};
 
-use anchor_lang::prelude::{AccountInfo, AccountLoader};
+use anchor_lang::{prelude::{AccountInfo, AccountLoader}, Discriminator};
 use arrayref::array_ref;
 use solana_program::msg;
 
-use crate::{errors::{DexError, VortexDexResult}, utils::constants::QUOTE_SPOT_MARKET_INDEX};
+use crate::{errors::{DexError, VortexDexResult}, safe_methods::SafeUnwrap, utils::constants::QUOTE_SPOT_MARKET_INDEX};
 
 use super::spot_market::SpotMarket;
 
@@ -146,7 +146,7 @@ impl<'a> SpotMarketMap<'a> {
     }
 
     pub fn load<'b, 'c>(
-        writable_spot_markets: &'b SpotMarketMap,
+        writable_spot_markets: &'b SpotMarketSet,
         account_info_iter: &'c mut Peekable<Iter<'a, AccountInfo<'a>>>,
     ) -> VortexDexResult<SpotMarketMap<'a>> {
         let mut spot_market_map: SpotMarketMap = SpotMarketMap(BTreeMap::new());

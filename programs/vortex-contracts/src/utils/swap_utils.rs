@@ -1,4 +1,4 @@
-use crate::{errors::VortexDexResult, state::{oracle::StrictOraclePrice, position::PositionDirection, spot_market::SpotMarket}};
+use crate::{casting::Cast, errors::VortexDexResult, safe_methods::SafeMath, state::{oracle::StrictOraclePrice, position::PositionDirection, spot_market::SpotMarket}};
 
 use super::{constants::{PRICE_PRECISION, SPOT_WEIGHT_PRECISION_U128}, margin_utils::MarginRequirementType, order_utils::{calculate_fill_price, validate_fill_price_within_price_bands}, spot_market_utils::{get_strict_token_value, get_token_value}};
 

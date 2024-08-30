@@ -22,7 +22,7 @@ macro_rules! validate {
             if ($assert) {
                 Ok(())
             } else {
-                let error_code: DexError = $err;
+                let error_code: $crate::errors::DexError = $err;
                 msg!("Error {} thrown at {}:{}", error_code, file!(), line!());
                 Err(error_code)
             }
@@ -31,7 +31,7 @@ macro_rules! validate {
         if ($assert) {
             Ok(())
         } else {
-            let error_code: DexError = $err;
+            let error_code: $crate::errors::DexError = $err;
             msg!("Error {} thrown at {}:{}", error_code, file!(), line!());
             msg!($($arg)*);
             Err(error_code)
@@ -68,7 +68,7 @@ macro_rules! load_mut {
 macro_rules! load {
     ($account_loader:expr) => {{
         $account_loader.load().map_err(|_| {
-            let error_code = DexError::UnableToLoadAccountLoader;
+            let error_code = $crate::errors::DexError::UnableToLoadAccountLoader;
             msg!("Error {} thrown at {}:{}", error_code, file!(), line!());
             error_code
         })
