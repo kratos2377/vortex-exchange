@@ -1,12 +1,11 @@
-use std::cell::Ref;
-
 use anchor_lang::prelude::*;
+use std::cell::Ref;
 use solana_program::msg;
+use crate::safe_methods::SafeUnwrap;
+use crate::state::load_ref::load_ref;
+use crate::{casting::Cast, errors::{DexError, VortexDexResult}, safe_methods::SafeMath, utils::constants::{PRICE_PRECISION, PRICE_PRECISION_I64, PRICE_PRECISION_U64}, validate};
 
-use crate::{casting::Cast, errors::{DexError, VortexDexResult}, safe_methods::{SafeMath, SafeUnwrap}, validate};
 
-use super::{load_ref::load_ref};
-use crate::utils::constants::{PRICE_PRECISION, PRICE_PRECISION_I64, PRICE_PRECISION_U64};
 
 
 #[derive(Default, AnchorSerialize, AnchorDeserialize, Clone, Copy, Eq, PartialEq, Debug)]
