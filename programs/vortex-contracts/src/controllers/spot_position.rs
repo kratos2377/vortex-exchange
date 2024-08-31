@@ -1,5 +1,5 @@
 use solana_program::msg;
-
+use crate::math_error;
 use crate::{casting::Cast, controllers::spot_balance::update_revenue_pool_balances, errors::{DexError, VortexDexResult}, safe_decrement, safe_increment, safe_methods::SafeMath, state::{operations::SpotOperation, position::PositionDirection, spot_market::{AssetTier, MarketStatus, SpotBalanceType, SpotMarket}, user::{SpotPosition, User}, user_stats::UserStats}, utils::{constants::QUOTE_PRECISION, spot_market_utils::check_withdraw_limits}, validate};
 
 use super::spot_balance::update_spot_balances;

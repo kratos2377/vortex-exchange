@@ -17,6 +17,6 @@ default = ["devnet"]
 devnet=[]
 
 [dependencies]
-anchor-lang = "0.30.1"
+anchor-lang = "0.29.0"
 arrayref = "0.3.6"
 bytemuck = { version = "1.4.0" }

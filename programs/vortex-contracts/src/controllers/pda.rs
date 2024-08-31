@@ -1,6 +1,7 @@
-use anchor_lang::prelude::*;
-use crate::errors::DexError;
+use anchor_lang::prelude::{AccountInfo, Pubkey};
 use solana_program::msg;
+use solana_program::rent::Rent;
+use crate::errors::DexError;
 
 use crate::{errors::VortexDexResult, validate};
 

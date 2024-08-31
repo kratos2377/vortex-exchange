@@ -1,18 +1,17 @@
 use anchor_lang::{prelude::*, Discriminator};
 
-
+use crate::math_error;
 use anchor_spl::token::Token;
 use anchor_spl::token_2022::Token2022;
-use anchor_spl::token_interface::{
-    self, CloseAccount, Mint, TokenAccount, TokenInterface, Transfer, TransferChecked,
-};
-
+use anchor_spl::token_interface::{ TokenAccount, TokenInterface};
 
 use borsh::{BorshDeserialize, BorshSerialize};
 use solana_program::{program::invoke, system_instruction::transfer, sysvar::instructions};
 
 use crate::safe_methods::SafeMath;
-use crate::{casting::Cast, controllers::{self, orders::ModifyOrderId, spot_balance::update_revenue_pool_balances, spot_position::{charge_withdraw_fee, update_spot_balances_and_cumulative_deposits, update_spot_balances_and_cumulative_deposits_with_limits}}, errors::DexError, get_then_update_id, ids::{jupiter_mainnet_4, jupiter_mainnet_6, marinade_mainnet, serum_program}, instructions::{account::{get_token_mint, load_maps, AccountMaps}, constraints::{can_sign_for_user, is_stats_for_user}}, load, load_mut, oracle::{PrelaunchOracle, PrelaunchOracleParams}, print_error, safe_decrement, safe_increment, spot_market::SpotMarket, state::{dex_state::{DexState, ExchangeStatus}, events::{DepositDirection, DepositExplanation, DepositRecord, NewUserAccountRecord, OrderActionExplanation, SwapRecord}, fulfillment_params::{serum::SerumFulfillmentParams, vortex::MatchFulfillmentParams}, operations::SpotOperation, oracle::StrictOraclePrice, order_params::{ModifyOrderParams, OrderParams, PlaceOrderOptions, PostOnlyParam}, position::PositionDirection, spot_fulfillment_params::SpotFulfillmentParams, spot_market::{MarketStatus, SpotBalanceType}, spot_market_map::{get_writable_spot_market_set, get_writable_spot_market_set_from_many, MarketSet}, user::{MarketType, OrderType, User}, user_map::{load_user_maps, UserMap, UserStatsMap}, user_stats::UserStats}, utils::{self, constants::{QUOTE_SPOT_MARKET_INDEX, THIRTEEN_DAY}, liquidation_utils::is_user_being_liquidated, margin_utils::{calculate_max_withdrawable_amount, meets_withdraw_margin_requirement, validate_spot_margin_trading, MarginRequirementType}, spot_market_utils::{self, get_token_value}, swap_utils::{calculate_swap_price, validate_price_bands_for_swap}, token_utils, validation_utils::validate_user_deletion}, validate};
+use crate::{casting::Cast,
+     controllers::{self, orders::ModifyOrderId, spot_balance::update_revenue_pool_balances,
+         spot_position::{charge_withdraw_fee, update_spot_balances_and_cumulative_deposits, update_spot_balances_and_cumulative_deposits_with_limits}}, errors::DexError, get_then_update_id, ids::{jupiter_mainnet_4, jupiter_mainnet_6, marinade_mainnet, serum_program}, instructions::{account::{get_token_mint, load_maps, AccountMaps}, constraints::{can_sign_for_user, is_stats_for_user}}, load, load_mut, oracle::{PrelaunchOracle, PrelaunchOracleParams}, print_error, safe_decrement, safe_increment, spot_market::SpotMarket, state::{dex_state::{DexState, ExchangeStatus}, events::{DepositDirection, DepositExplanation, DepositRecord, NewUserAccountRecord, OrderActionExplanation, SwapRecord}, fulfillment_params::{serum::SerumFulfillmentParams, vortex::MatchFulfillmentParams}, operations::SpotOperation, oracle::StrictOraclePrice, order_params::{ModifyOrderParams, OrderParams, PlaceOrderOptions, PostOnlyParam}, position::PositionDirection, spot_fulfillment_params::SpotFulfillmentParams, spot_market::{MarketStatus, SpotBalanceType}, spot_market_map::{get_writable_spot_market_set, get_writable_spot_market_set_from_many, MarketSet}, user::{MarketType, OrderType, User}, user_map::{load_user_maps, UserMap, UserStatsMap}, user_stats::UserStats}, utils::{self, constants::{QUOTE_SPOT_MARKET_INDEX, THIRTEEN_DAY}, liquidation_utils::is_user_being_liquidated, margin_utils::{calculate_max_withdrawable_amount, meets_withdraw_margin_requirement, validate_spot_margin_trading, MarginRequirementType}, spot_market_utils::{self, get_token_value}, swap_utils::{calculate_swap_price, validate_price_bands_for_swap}, token_utils, validation_utils::validate_user_deletion}, validate};
 use crate::instructions::constraints::{fill_not_paused, exchange_not_paused , withdraw_not_paused, deposit_not_paused};
 
 use super::{account::get_token_interface, executors::SpotFulfillmentType};
@@ -89,7 +88,7 @@ pub fn initialize_new_user_account<'c: 'info, 'info>(
 
 
 pub fn handle_initialize_user_stats<'c: 'info, 'info>(
-    ctx: Context<'_, '_, 'c, 'info, InitializeUserStats<'info>>
+    ctx: Context<'_, '_, 'c, 'info, InitializeUserStats>
 ) -> Result<()> {
     let clock = Clock::get()?;
 
@@ -284,6 +283,7 @@ pub fn handle_deposit<'c: 'info, 'info>(
 
     Ok(())
 }
+
 
 #[access_control(
     withdraw_not_paused(&ctx.accounts.state)
@@ -2064,12 +2064,12 @@ pub struct InitializeUserStats<'info>{
 
 
 #[derive(Accounts)]
-#[instruction(market_index: u16,)]
+#[instruction(market_index: u16)]
 pub struct Deposit<'info> {
     pub state: Box<Account<'info,DexState>>,
     #[account(
         mut,
-        constraint = can_sign_for_user(&user, &authority)
+        constraint = can_sign_for_user(&user, &authority)?
     )]
     pub user: AccountLoader<'info, User>,
     #[account(

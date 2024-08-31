@@ -1,5 +1,5 @@
 use crate::{dex_state::DexState, errors::{DexError, VortexDexResult}, state::user::SpotPosition, user::{OrderStatus, User}, user_stats::UserStats, validate};
-
+use crate::msg;
 use super::constants::{MAX_OPEN_ORDERS, SPOT_IMF_PRECISION, SPOT_UTILIZATION_PRECISION_U32, SPOT_WEIGHT_PRECISION, THIRTEEN_DAY};
 
 

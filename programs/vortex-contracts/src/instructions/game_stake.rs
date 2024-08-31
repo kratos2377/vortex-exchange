@@ -46,7 +46,7 @@ pub fn handle_init_player_bet(
 
     // Add logic to add money to so that users can recalim the money they won without paying some transaction fee
 
-    let game = &load_mut!(ctx.accounts.game)?;
+    let mut game = load_mut!(ctx.accounts.game)?;
     let player_total_bet = &mut ctx.accounts.player_total_bet.load_init()?;
     // let clock = Clock::get()?;
     // let now = clock
@@ -90,7 +90,7 @@ pub fn handle_user_bet(
 
     validate!(user_bet_account_model.game_id == game_id, DexError::AlreadyMadeABetOnGame );
 
-    let user_bet = &mut ctx.accounts.user_bet.load()?;
+    let user_bet = &mut ctx.accounts.user_bet.load_init()?;
     // let clock = Clock::get()?;
     // let now = clock
     //     .unix_timestamp
@@ -128,7 +128,7 @@ pub fn handle_update_bet(
     user_betting_on_id: [u8;16],
     money_staked: u64,
 ) -> Result<()> {
-    let user_bet = &load_mut!(ctx.accounts.user_bet)?;
+    let mut user_bet = load_mut!(ctx.accounts.user_bet)?;
     let mut player_total_bet = load_mut!(ctx.accounts.player_total_bet)?;
     let mut game = load_mut!(ctx.accounts.game)?;
     let user_bet_wallet_key = ctx.accounts.user_bet_wallet_key.key();
@@ -158,7 +158,7 @@ pub fn handle_settle_all_bets_for_game(
     user_betting_on_id: [u8;16],
     winner_id: [u8;16],
 ) -> Result<()> {
-    let user_bet_wallet_key = ctx.accounts.user_bet_wallet_key;
+    let user_bet_wallet_key = &ctx.accounts.user_bet_wallet_key.key();
     let game = load_mut!(ctx.accounts.game)?;
     let user_bet = load_mut!(ctx.accounts.user_bet)?;
     let player_total_bet = load_mut!(ctx.accounts.player_bet)?;
@@ -174,11 +174,11 @@ pub fn handle_settle_all_bets_for_game(
     let total_lamports_to_be_transferred = (money_to_be_rewarded_to_user * LAMPORTS_PER_SOL) as u64;
         &solana_program::system_instruction::transfer(
             &admin_hot_wallet::id(),
-            user_bet_wallet_key.key,
+            user_bet_wallet_key,
             total_lamports_to_be_transferred,
         );
 
-Ok(())
+    Ok(())
 }
 
 #[derive(Accounts)]

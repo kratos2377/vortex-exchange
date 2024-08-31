@@ -1,6 +1,6 @@
 use std::{fmt, ops::Neg, panic::Location};
 use anchor_lang::prelude::*;
-
+use crate::math_error;
 use borsh::{BorshDeserialize, BorshSerialize};
 
 use crate::{casting::Cast, errors::{DexError, VortexDexResult}, get_then_update_id, instructions::constraints::{can_sign_for_user, is_stats_for_user}, safe_increment, safe_methods::SafeMath, utils::{auction_utils::{calculate_auction_price, is_auction_complete}, constants::{FUEL_START_TS, OPEN_ORDER_MARGIN_REQUIREMENT, QUOTE_PRECISION_U64, QUOTE_SPOT_MARKET_INDEX}, margin_utils::{calculate_margin_requirement_and_total_collateral_and_liability_info, validate_any_isolated_tier_requirements}, order_utils::{standardize_base_asset_amount, standardize_price}, spot_market_utils::{get_signed_token_amount, get_strict_token_value, get_token_amount, get_token_value}}, validate};

@@ -1,5 +1,5 @@
 use crate::errors::DexError;
-
+use crate::msg;
 use crate::{errors::VortexDexResult, spot_market::SpotBalanceType, user::{OrderStatus, User}, validate};
 
 pub fn validate_user_is_idle(user: &User, slot: u64, accelerated: bool) -> VortexDexResult {

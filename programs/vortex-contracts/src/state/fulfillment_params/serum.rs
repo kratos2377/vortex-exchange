@@ -578,7 +578,6 @@ impl<'a, 'b> SpotFulfillmentParams for SerumFulfillmentParams<'a, 'b> {
             order_type: serum_dex::matching::OrderType::ImmediateOrCancel,
             client_order_id: 0,
             limit: 10,
-            max_ts: self.now,
         };
 
         let _market_fees_accrued_before = market_state_before.pc_fees_accrued;

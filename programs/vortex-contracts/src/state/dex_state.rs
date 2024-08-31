@@ -1,12 +1,13 @@
 use anchor_lang::prelude::*;
-use enumflags2::BitFlags;
+use enumflags2::{BitFlags , bitflags};
 
 use crate::{errors::VortexDexResult, safe_methods::SafeMath , safe_methods::SafeUnwrap};
 
 use crate::utils::constants::{FEE_DENOMINATOR, FEE_PERCENTAGE_DENOMINATOR, LAMPORTS_PER_SOL_U64, MAX_REFERRER_REWARD_EPOCH_UPPER_BOUND, PERCENTAGE_PRECISION_U64};
 
-
-#[derive(BitFlags, Clone, Copy, PartialEq, Debug, Eq)]
+#[bitflags]
+#[repr(u8)]
+#[derive(Clone, Copy, PartialEq, Debug, Eq)]
 pub enum ExchangeStatus {
     // Active = 0b00000000
     DepositPaused = 0b00000001,
@@ -59,7 +60,7 @@ impl DexState {
     pub const SIZE: usize = 992;
 
     pub fn get_exchange_status(&self) -> VortexDexResult<BitFlags<ExchangeStatus>> {
-        BitFlags::<ExchangeStatus>::from_bits(usize::from(self.exchange_status)).safe_unwrap()
+        BitFlags::<ExchangeStatus>::from_bits(u8::from(self.exchange_status)).safe_unwrap()
     }
 
     pub fn amm_paused(&self) -> VortexDexResult<bool> {
