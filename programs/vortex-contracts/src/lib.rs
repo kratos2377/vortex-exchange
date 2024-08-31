@@ -215,14 +215,6 @@ pub mod vortex_contracts {
         handle_update_user_margin_trading_enabled(ctx, _sub_account_id, margin_trading_enabled)
     }
 
-    pub fn update_user_delegate(
-        ctx: Context<UpdateUser>,
-        _sub_account_id: u16,
-        delegate: Pubkey,
-    ) -> Result<()> {
-        handle_update_user_delegate(ctx, _sub_account_id, delegate)
-    }
-
     pub fn update_user_reduce_only(
         ctx: Context<UpdateUser>,
         _sub_account_id: u16,

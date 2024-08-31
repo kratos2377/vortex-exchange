@@ -18,9 +18,9 @@ default = ["devnet"]
 devnet=[]
 
 [dependencies]
-anchor-lang = "0.29.0"
+anchor-lang = "0.30.1"
 solana-program = "1.16"
-anchor-spl = "0.29.0"
+anchor-spl = "0.30.1"
 pyth-client = "0.2.2"
 bytemuck = { version = "1.4.0" }
 borsh = "0.10.3"

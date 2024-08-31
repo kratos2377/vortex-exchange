@@ -5,7 +5,6 @@ use crate::{errors::DexError, state::{dex_state::{DexState, ExchangeStatus}, spo
 pub fn can_sign_for_user(user: &AccountLoader<User>, signer: &Signer) -> anchor_lang::Result<bool> {
     user.load().map(|user| {
         user.authority.eq(signer.key)
-            || (user.delegate.eq(signer.key) && !user.delegate.eq(&Pubkey::default()))
     })
 }
 

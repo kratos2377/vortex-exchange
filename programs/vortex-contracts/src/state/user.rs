@@ -45,6 +45,7 @@ pub struct User {
     pub open_auctions: u8,
     pub has_open_auction: bool,
     pub last_fuel_bonus_update_ts: u32,
+    pub is_margin_trading_enabled: bool,
 }
 
 impl User {

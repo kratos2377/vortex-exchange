@@ -16,11 +16,11 @@ pub fn handle_init_game(
     // Add logic to add money to so that users can recalim the money they won without paying some transaction fee
 
     let game = &mut ctx.accounts.game.load_init()?;
-    let clock = Clock::get()?;
-    let now = clock
-        .unix_timestamp
-        .cast()
-        .or(Err(DexError::UnableToCastUnixTime))?;
+    // let clock = Clock::get()?;
+    // let now = clock
+    //     .unix_timestamp
+    //     .cast()
+    //     .or(Err(DexError::UnableToCastUnixTime))?;
 
     **game = Game {
         game_id: game_id,
@@ -48,11 +48,11 @@ pub fn handle_init_player_bet(
 
     let game = &load_mut!(ctx.accounts.game)?;
     let player_total_bet = &mut ctx.accounts.player_total_bet.load_init()?;
-    let clock = Clock::get()?;
-    let now = clock
-        .unix_timestamp
-        .cast()
-        .or(Err(DexError::UnableToCastUnixTime))?;
+    // let clock = Clock::get()?;
+    // let now = clock
+    //     .unix_timestamp
+    //     .cast()
+    //     .or(Err(DexError::UnableToCastUnixTime))?;
 
     game.total_pot += total_money_staked;
 
@@ -84,18 +84,18 @@ pub fn handle_user_bet(
     bet_type: BetType
 ) -> Result<()> {
     let user_bet_account_model = load_mut!(ctx.accounts.user_bet)?;
-    let user_bet_wallet_key = ctx.accounts.payer.key();
-    let game = load_mut!(ctx.accounts.game)?;
-    let player_bet = load_mut!(ctx.accounts.player_total_bet)?;
+    let user_bet_wallet_key = ctx.accounts.user_bet_wallet_key.key();
+    let mut game = load_mut!(ctx.accounts.game)?;
+    let mut player_bet = load_mut!(ctx.accounts.player_total_bet)?;
 
-    validate!(user_bet_account_model.game_id == game_id, Err(DexError::AlreadyMadeABetOnGame) );
+    validate!(user_bet_account_model.game_id == game_id, DexError::AlreadyMadeABetOnGame );
 
     let user_bet = &mut ctx.accounts.user_bet.load()?;
-    let clock = Clock::get()?;
-    let now = clock
-        .unix_timestamp
-        .cast()
-        .or(Err(DexError::UnableToCastUnixTime))?;
+    // let clock = Clock::get()?;
+    // let now = clock
+    //     .unix_timestamp
+    //     .cast()
+    //     .or(Err(DexError::UnableToCastUnixTime))?;
 
     game.total_pot += money_staked;
     player_bet.total_money_staked_on_player += money_staked;
@@ -111,7 +111,7 @@ pub fn handle_user_bet(
     
     let total_lamports_to_be_transferred = (money_staked * LAMPORTS_PER_SOL) as u64;
     &solana_program::system_instruction::transfer(
-        &user_bet_wallet_key.key,
+        &user_bet_wallet_key.key(),
         &admin_hot_wallet::id(),
         total_lamports_to_be_transferred,
     );
@@ -187,7 +187,7 @@ pub struct InitGame<'info> {
 // in this case payer should be some global admin
     #[account(
         init,
-        seeds = [b"game", game_id.to_le_bytes().as_ref()],
+        seeds = [b"game", game_id.as_ref()],
         bump,
         space = Game::SIZE,
         payer = admin
@@ -205,7 +205,7 @@ pub struct InitPlayerBet<'info> {
 // in this case payer should be some global admin
     #[account(
         init,
-        seeds = [b"player_bet", game_id.to_le_bytes().as_ref() , user_betting_on_id.to_ley_bytes().as_ref()],
+        seeds = [b"player_bet", game_id.as_ref() , user_betting_on_id.as_ref()],
         bump,
         space = PlayerTotalBet::SIZE,
         payer = admin
@@ -213,7 +213,7 @@ pub struct InitPlayerBet<'info> {
     pub player_total_bet: AccountLoader<'info, PlayerTotalBet>,
     #[account(
         mut,
-        seeds = [b"game", game_id.to_le_bytes().as_ref()],
+        seeds = [b"game", game_id.as_ref()],
         bump,
     )]
     pub game: AccountLoader<'info, Game>,
@@ -228,7 +228,7 @@ pub struct InitPlayerBet<'info> {
 pub struct MakeUserGameBet<'info> {
 
     #[account(
-        init,  seeds = [b"user_game_bet", game_id.to_le_bytes().as_ref(), user_betting_on_id.to_le_bytes().as_ref(), user_bet_wallet_key.key.as_ref()],
+        init,  seeds = [b"user_game_bet", game_id.as_ref(), user_betting_on_id.as_ref(), user_bet_wallet_key.key.as_ref()],
         bump,
         space = UserGameBet::SIZE,
         payer = user_bet_wallet_key
@@ -236,13 +236,13 @@ pub struct MakeUserGameBet<'info> {
     pub user_bet: AccountLoader<'info, UserGameBet>,
     #[account(
         mut,
-        seeds = [b"player_bet", game_id.to_le_bytes().as_ref() , user_betting_on_id.to_ley_bytes().as_ref()],
+        seeds = [b"player_bet", game_id.as_ref() , user_betting_on_id.as_ref()],
         bump
     )]
     pub player_total_bet: AccountLoader<'info, PlayerTotalBet>,
     #[account(
         mut,
-        seeds = [b"game", game_id.to_le_bytes().as_ref()],
+        seeds = [b"game", game_id.as_ref()],
         bump
     )]
     pub game: AccountLoader<'info, Game>,
@@ -258,19 +258,19 @@ pub struct UpdateUserGameBet<'info> {
 
     #[account(
         mut,
-        seeds = [b"user_game_bet",  game_id.to_le_bytes().as_ref(), user_betting_on_id.to_le_bytes().as_ref(), user_bet_wallet_key.key.as_ref()],
+        seeds = [b"user_game_bet",  game_id.as_ref(), user_betting_on_id.as_ref(), user_bet_wallet_key.key.as_ref()],
         bump
     )]
     pub user_bet: AccountLoader<'info, UserGameBet>,
     #[account(
         mut,
-        seeds = [b"game", game_id.to_le_bytes().as_ref()],
+        seeds = [b"game", game_id.as_ref()],
         bump
     )]
     pub game: AccountLoader<'info, Game>,
     #[account(
         mut,
-        seeds = [b"player_bet", game_id.to_le_bytes().as_ref() , user_betting_on_id.to_ley_bytes().as_ref()],
+        seeds = [b"player_bet", game_id.as_ref() , user_betting_on_id.as_ref()],
         bump
     )]
     pub player_total_bet: AccountLoader<'info, PlayerTotalBet>, 
@@ -284,19 +284,19 @@ pub struct SettleAllBetsForGame<'info> {
 
     #[account(
         mut,
-        seeds = [b"user_game_bet", game_id.to_le_bytes().as_ref(), user_betting_on_id.to_le_bytes().as_ref(), user_bet_wallet_key.key.as_ref()],
+        seeds = [b"user_game_bet", game_id.as_ref(), user_betting_on_id.as_ref(), user_bet_wallet_key.key.as_ref()],
         bump
     )]
     pub user_bet: AccountLoader<'info, UserGameBet>,
     #[account(
         mut,
-        seeds = [b"game", game_id.to_le_bytes().as_ref()],
+        seeds = [b"game", game_id.as_ref()],
         bump
     )]
     pub game: AccountLoader<'info, Game>,
     #[account(
         mut,
-        seeds = [b"player_bet", game_id.to_le_bytes().as_ref(), user_betting_on_id.to_le_bytes().as_ref()],
+        seeds = [b"player_bet", game_id.as_ref(), user_betting_on_id.as_ref()],
         bump
     )]
     pub player_bet: AccountLoader<'info, PlayerTotalBet>,

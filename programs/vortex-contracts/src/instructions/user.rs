@@ -1,8 +1,17 @@
-use anchor_lang::prelude::*;
-use anchor_spl::{associated_token::AssociatedToken, token::{Token, TokenAccount}, token_2022::{spl_token_2022::extension::confidential_transfer::instruction, Token2022}, token_interface::TokenInterface};
+use anchor_lang::{prelude::*, Discriminator};
+
+
+use anchor_spl::token::Token;
+use anchor_spl::token_2022::Token2022;
+use anchor_spl::token_interface::{
+    self, CloseAccount, Mint, TokenAccount, TokenInterface, Transfer, TransferChecked,
+};
+
+
 use borsh::{BorshDeserialize, BorshSerialize};
 use solana_program::{program::invoke, system_instruction::transfer, sysvar::instructions};
 
+use crate::safe_methods::SafeMath;
 use crate::{casting::Cast, controllers::{self, orders::ModifyOrderId, spot_balance::update_revenue_pool_balances, spot_position::{charge_withdraw_fee, update_spot_balances_and_cumulative_deposits, update_spot_balances_and_cumulative_deposits_with_limits}}, errors::DexError, get_then_update_id, ids::{jupiter_mainnet_4, jupiter_mainnet_6, marinade_mainnet, serum_program}, instructions::{account::{get_token_mint, load_maps, AccountMaps}, constraints::{can_sign_for_user, is_stats_for_user}}, load, load_mut, oracle::{PrelaunchOracle, PrelaunchOracleParams}, print_error, safe_decrement, safe_increment, spot_market::SpotMarket, state::{dex_state::{DexState, ExchangeStatus}, events::{DepositDirection, DepositExplanation, DepositRecord, NewUserAccountRecord, OrderActionExplanation, SwapRecord}, fulfillment_params::{serum::SerumFulfillmentParams, vortex::MatchFulfillmentParams}, operations::SpotOperation, oracle::StrictOraclePrice, order_params::{ModifyOrderParams, OrderParams, PlaceOrderOptions, PostOnlyParam}, position::PositionDirection, spot_fulfillment_params::SpotFulfillmentParams, spot_market::{MarketStatus, SpotBalanceType}, spot_market_map::{get_writable_spot_market_set, get_writable_spot_market_set_from_many, MarketSet}, user::{MarketType, OrderType, User}, user_map::{load_user_maps, UserMap, UserStatsMap}, user_stats::UserStats}, utils::{self, constants::{QUOTE_SPOT_MARKET_INDEX, THIRTEEN_DAY}, liquidation_utils::is_user_being_liquidated, margin_utils::{calculate_max_withdrawable_amount, meets_withdraw_margin_requirement, validate_spot_margin_trading, MarginRequirementType}, spot_market_utils::{self, get_token_value}, swap_utils::{calculate_swap_price, validate_price_bands_for_swap}, token_utils, validation_utils::validate_user_deletion}, validate};
 use crate::instructions::constraints::{fill_not_paused, exchange_not_paused , withdraw_not_paused, deposit_not_paused};
 
@@ -1231,7 +1240,7 @@ pub fn handle_begin_swap<'c: 'info, 'info>(
     let mint = get_token_mint(remaining_accounts_iter)?;
 
     let mut user = load_mut!(&ctx.accounts.user)?;
-    let delegate_is_signer = user.delegate == ctx.accounts.authority.key();
+    let delegate_is_signer = false;
 
     validate!(!user.is_bankrupt(), DexError::UserBankrupt)?;
 
@@ -1873,15 +1882,6 @@ pub fn handle_update_user_margin_trading_enabled<'c: 'info, 'info>(
     Ok(())
 }
 
-pub fn handle_update_user_delegate(
-    ctx: Context<UpdateUser>,
-    _sub_account_id: u16,
-    delegate: Pubkey,
-) -> Result<()> {
-    let mut user = load_mut!(ctx.accounts.user)?;
-    user.delegate = delegate;
-    Ok(())
-}
 
 pub fn handle_update_user_reduce_only(
     ctx: Context<UpdateUser>,
@@ -1955,7 +1955,7 @@ pub fn handle_reclaim_rent(ctx: Context<ReclaimRent>) -> Result<()> {
     let user_stats = &mut load!(ctx.accounts.user_stats)?;
 
     // Skip age check if is no max sub accounts
-    let max_sub_accounts = ctx.accounts.state.max_number_of_sub_accounts();
+    let max_sub_accounts = 0;
     let estimated_user_stats_age = user_stats.get_age_ts(Clock::get()?.unix_timestamp);
     validate!(
         max_sub_accounts == 0 || estimated_user_stats_age >= THIRTEEN_DAY,
@@ -2064,7 +2064,7 @@ pub struct InitializeUserStats<'info>{
 
 
 #[derive(Accounts)]
-#[instruction(market_index: u16)]
+#[instruction(market_index: u16,)]
 pub struct Deposit<'info> {
     pub state: Box<Account<'info,DexState>>,
     #[account(

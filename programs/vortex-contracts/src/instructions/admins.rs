@@ -2,7 +2,8 @@ use std::{convert::identity, mem::size_of};
 
 use anchor_lang::prelude::*;
 use anchor_spl::{token::Token, token_2022::Token2022, token_interface::{Mint, TokenAccount, TokenInterface}};
-use crate::errors::DexError;
+use serum_dex::state::ToAlignedBytes;
+use crate::{casting::Cast, errors::DexError, safe_methods::SafeMath, spot_market::InsuranceFund, utils::constants::THIRTEEN_DAY};
 use crate::{ids::admin_hot_wallet, instructions::{account::get_token_mint, constraints::{deposit_not_paused , spot_market_valid}}, oracle::OraclePriceData, user::User, user_stats::UserStats, utils::{constants::{FUEL_START_TS, IF_FACTOR_PRECISION, LIQUIDATION_FEE_PRECISION, PERCENTAGE_PRECISION}, fees_utils::validate_fee_structure, spot_market_utils::validate_spot_market_vault_amount}};
 use crate::{controllers::{self, token::close_vault}, dex_state::{DexState, ExchangeStatus, FeeStructure, OracleGuardRails}, events::SpotMarketVaultDepositRecord, fulfillment_params::serum::{SerumContext, SerumV3FulfillmentConfig}, get_then_update_id, load, load_mut, operations::SpotOperation, oracle::{get_oracle_price, HistoricalIndexData, HistoricalOracleData, OracleSource}, oracle_map::OracleMap, safe_decrement, spot_market::{AssetTier, MarketStatus, PoolBalance, SpotBalanceType, SpotFulfillmentConfigStatus, SpotMarket}, utils::{constants::{DEFAULT_LIQUIDATION_MARGIN_BUFFER_RATIO, QUOTE_SPOT_MARKET_INDEX, SPOT_BALANCE_PRECISION, SPOT_CUMULATIVE_INTEREST_PRECISION, TWENTY_FOUR_HOUR}, spot_market_utils::get_token_amount, validation_utils::{validate_borrow_rate, validate_margin_weights}}, validate};
 
@@ -19,6 +20,7 @@ pub fn handle_admin_initialize(ctx: Context<Initialize>) -> Result<()> {
         exchange_status: ExchangeStatus::active(),
         whitelist_mint: Pubkey::default(),
         discount_mint: Pubkey::default(),
+        oracle_guard_rails: OracleGuardRails::default(),
         number_of_authorities: 0,
         number_of_sub_accounts: 0,
         number_of_markets: 0,
@@ -250,6 +252,13 @@ pub fn handle_initialize_spot_market(
         fuel_boost_insurance: 0,
         token_program,
         padding: [0; 41],
+        insurance_fund: InsuranceFund {
+            vault: *ctx.accounts.insurance_fund_vault.to_account_info().key,
+            unstaking_period: THIRTEEN_DAY,
+            total_factor: if_total_factor,
+            user_factor: if_total_factor / 2,
+            ..InsuranceFund::default()
+        },
     };
 
     Ok(())
@@ -1239,7 +1248,7 @@ pub fn handle_update_spot_market_step_size_and_tick_size(
 
     validate!(
         spot_market.market_index == 0 || step_size > 0 && tick_size > 0,
-        ErrorCode::DefaultError
+        DexError::DefaultError
     )?;
 
     msg!(
@@ -1272,7 +1281,7 @@ pub fn handle_update_spot_market_min_order_size(
 
     validate!(
         spot_market.market_index == 0 || order_size > 0,
-        ErrorCode::DefaultError
+        DexError::DefaultError
     )?;
 
     msg!(

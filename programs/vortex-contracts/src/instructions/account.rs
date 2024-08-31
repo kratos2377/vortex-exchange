@@ -1,10 +1,10 @@
 
-use anchor_lang::prelude::*;
+use anchor_lang::{prelude::*, Discriminator};
 use anchor_spl::{token::TokenAccount, token_interface::{Mint, TokenInterface}};
 use arrayref::array_ref;
 use std::{cell::RefMut, iter::Peekable};
 
-use crate::{errors::{DexError, VortexDexResult}, state::{dex_state::OracleGuardRails, load_ref::load_ref_mut, oracle::{OracleSource, PrelaunchOracle}, oracle_map::OracleMap, spot_market_map::{MarketSet, SpotMarketMap}, user::User, user_stats::UserStats}, validate};
+use crate::{errors::{DexError, VortexDexResult}, safe_methods::SafeUnwrap, state::{dex_state::OracleGuardRails, load_ref::load_ref_mut, oracle::{OracleSource, PrelaunchOracle}, oracle_map::OracleMap, spot_market_map::{MarketSet, SpotMarketMap}, user::User, user_stats::UserStats}, validate};
 use std::slice::Iter;
 pub struct AccountMaps<'a> {
     pub spot_market_map: SpotMarketMap<'a>,

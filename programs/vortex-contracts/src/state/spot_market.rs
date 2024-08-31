@@ -707,6 +707,24 @@ pub enum MarketStatus {
     Delisted,
 }
 
+
+impl MarketStatus {
+    pub fn validate_not_deprecated(&self) -> VortexDexResult {
+        if matches!(
+            self,
+            MarketStatus::FundingPaused
+                | MarketStatus::AmmPaused
+                | MarketStatus::FillPaused
+                | MarketStatus::WithdrawPaused
+        ) {
+            msg!("MarketStatus is deprecated");
+            Err(DexError::DefaultError)
+        } else {
+            Ok(())
+        }
+    }
+}
+
 #[derive(
     Clone, Copy, BorshSerialize, BorshDeserialize, PartialEq, Debug, Eq, PartialOrd, Ord, Default,
 )]

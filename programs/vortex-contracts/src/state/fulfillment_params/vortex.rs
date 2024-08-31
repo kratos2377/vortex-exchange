@@ -1,5 +1,6 @@
 use crate::errors::{VortexDexResult, DexError};
-
+use anchor_lang::prelude::*;
+use anchor_spl::token_interface::TokenAccount;
 use crate::state::events::OrderActionExplanation;
 
 use crate::state::position::PositionDirection;
@@ -10,8 +11,6 @@ use crate::validate;
 
 
 use anchor_lang::prelude::InterfaceAccount;
-
-use anchor_spl::token_interface::TokenAccount;
 use arrayref::array_ref;
 
 use solana_program::account_info::AccountInfo;
