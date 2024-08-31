@@ -174,14 +174,16 @@ pub fn get_pyth_price(
     let published_slot: u64;
 
     if is_pull_oracle {
-        let price_message = pyth_solana_receiver_sdk::price_update::PriceUpdateV2::try_deserialize(
-            &mut pyth_price_data,
-        )
-        .unwrap();
-        oracle_price = price_message.price_message.price;
-        oracle_conf = price_message.price_message.conf;
-        oracle_precision = 10_u128.pow(price_message.price_message.exponent.unsigned_abs());
-        published_slot = price_message.posted_slot;
+        // Pyth program not working right now, will fix it later
+        // let price_message = pyth_solana_receiver_sdk::price_update::PriceUpdateV2::try_deserialize(
+        //     &mut pyth_price_data,
+        // )
+        // .unwrap();
+         oracle_price = 0;
+         oracle_conf = 0;
+         oracle_precision = 0;
+        // published_slot = price_message.posted_slot;
+        published_slot = 0
     } else {
         let price_data = pyth_client::cast::<pyth_client::Price>(pyth_price_data);
         oracle_price = price_data.agg.price;
