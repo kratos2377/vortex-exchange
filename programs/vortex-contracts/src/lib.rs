@@ -747,3 +747,15 @@ pub mod vortex_contracts {
 
 
 }
+
+#[cfg(not(feature = "no-entrypoint"))]
+use solana_security_txt::security_txt;
+#[cfg(not(feature = "no-entrypoint"))]
+security_txt! {
+    name: "Vortex",
+    project_url: "none",
+    contacts: "none",
+    policy: "https://github.com/kratos2377/vortex-contracts/blob/main/SECURITY.md",
+    preferred_languages: "en",
+    source_code: "https://github.com/kratos2377/vortex-contracts"
+}
