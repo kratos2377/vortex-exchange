@@ -709,7 +709,7 @@ pub mod vortex_contracts {
 
 
     
-    pub fn handle_user_bet(
+    pub fn user_bet(
         ctx: Context<MakeUserGameBet>,
         game_id: [u8; 16],
         user_betting_on_id: [u8;16],
@@ -722,7 +722,7 @@ pub mod vortex_contracts {
 
 
         
-    pub fn update_User_bet(
+    pub fn update_user_bet(
         ctx: Context<UpdateUserGameBet>,
         bet_type: BetType,
         game_id: [u8;16],
