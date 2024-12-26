@@ -77,9 +77,8 @@ pub fn calculate_size_discount_asset_weight(
 pub fn calculate_user_safest_position_tiers(
     user: &User,
     spot_market_map: &SpotMarketMap,
-) -> VortexDexResult<(AssetTier, ContractTier)> {
+) -> VortexDexResult<(AssetTier)> {
     let mut safest_tier_spot_liablity: AssetTier = AssetTier::default();
-    let mut safest_tier_perp_liablity: ContractTier = ContractTier::default();
 
     for spot_position in user.spot_positions.iter() {
         if spot_position.is_available() || spot_position.balance_type == SpotBalanceType::Deposit {
@@ -89,15 +88,8 @@ pub fn calculate_user_safest_position_tiers(
         safest_tier_spot_liablity = min(safest_tier_spot_liablity, spot_market.asset_tier);
     }
 
-    // for market_position in user.perp_positions.iter() {
-    //     if market_position.is_available() {
-    //         continue;
-    //     }
-      
-    //     safest_tier_perp_liablity = min(safest_tier_perp_liablity, market.contract_tier);
-    // }
 
-    Ok((safest_tier_spot_liablity, safest_tier_perp_liablity))
+    Ok((safest_tier_spot_liablity))
 }
 
 pub fn calculate_margin_requirement_and_total_collateral_and_liability_info(
@@ -305,7 +297,6 @@ pub fn calculate_margin_requirement_and_total_collateral_and_liability_info(
         }
     }
 
-    // Add perp markets support later
 
     calculation.validate_num_spot_liabilities()?;
 
@@ -316,30 +307,13 @@ pub fn validate_any_isolated_tier_requirements(
     user: &User,
     calculation: MarginCalculation,
 ) -> VortexDexResult {
-    if calculation.with_perp_isolated_liability && !user.is_reduce_only() {
-        validate!(
-            calculation.num_perp_liabilities <= 1,
-            DexError::IsolatedAssetTierViolation,
-            "User attempting to increase perp liabilities above 1 with a isolated tier liability"
-        )?;
 
-
-        if calculation.num_spot_liabilities > 0 {
-            let quote_spot_position = user.get_quote_spot_position();
-            validate!(
-                    (calculation.num_spot_liabilities == 1 && quote_spot_position.is_borrow()
-                    ),
-                    DexError::IsolatedAssetTierViolation,
-                    "User attempting to increase spot liabilities beyond usdc with a isolated tier liability"
-                )?;
-        }
-    }
 
     if calculation.with_spot_isolated_liability && !user.is_reduce_only() {
         validate!(
-            calculation.num_perp_liabilities == 0 && calculation.num_spot_liabilities == 1,
+            calculation.num_spot_liabilities == 1,
             DexError::IsolatedAssetTierViolation,
-            "User attempting to increase perp liabilities above 0 with a isolated tier liability"
+            "User attempting to increase liabilities above 1 with a isolated tier liability"
         )?;
     }
 
@@ -515,22 +489,6 @@ pub fn validate_spot_margin_trading(
     spot_market_map: &SpotMarketMap,
     oracle_map: &mut OracleMap,
 ) -> VortexDexResult {
-    // if user.is_margin_trading_enabled {
-    //     for perp_position in &user.perp_positions {
-    //         if !perp_position.is_available() {
-    //             let perp_market = perp_market_map.get_ref(&perp_position.market_index)?;
-
-    //             validate!(
-    //                 perp_market.contract_tier != ContractTier::Isolated,
-    //                 DexError::IsolatedAssetTierViolation,
-    //                 "Isolated perpetual market = {} doesn't allow margin trading",
-    //                 perp_market.market_index
-    //             )?;
-    //         }
-    //     }
-
-    //     return Ok(());
-    // }
 
     let mut total_open_bids_value = 0_i128;
     for spot_position in &user.spot_positions {

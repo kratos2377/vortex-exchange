@@ -26,7 +26,6 @@ pub struct MarginContext {
     pub margin_buffer: u128,
     pub fuel_bonus_numerator: i64,
     pub fuel_bonus: u64,
-    pub fuel_perp_delta: Option<(u16, i64)>,
     pub fuel_spot_deltas: [(u16, i128); 2],
 }
 
@@ -57,7 +56,6 @@ impl MarginContext {
             margin_buffer: 0,
             fuel_bonus_numerator: 0,
             fuel_bonus: 0,
-            fuel_perp_delta: None,
             fuel_spot_deltas: [(0, 0); 2],
         }
     }
@@ -72,8 +70,6 @@ impl MarginContext {
         self
     }
 
-    // how to change the user's spot position to match how it was prior to instruction change
-    // i.e. diffs are ADDED to perp
  
     pub fn fuel_spot_delta(mut self, market_index: u16, delta: i128) -> Self {
         self.fuel_spot_deltas[0] = (market_index, delta);
@@ -115,7 +111,6 @@ impl MarginContext {
             strict: false,
             fuel_bonus_numerator: 0,
             fuel_bonus: 0,
-            fuel_perp_delta: None,
             fuel_spot_deltas: [(0, 0); 2],
         }
     }
@@ -151,14 +146,10 @@ pub struct MarginCalculation {
     #[cfg(test)]
     pub margin_requirement_plus_buffer: u128,
     pub num_spot_liabilities: u8,
-    pub num_perp_liabilities: u8,
     pub all_oracles_valid: bool,
-    pub with_perp_isolated_liability: bool,
     pub with_spot_isolated_liability: bool,
     pub total_spot_asset_value: i128,
     pub total_spot_liability_value: u128,
-    pub total_perp_liability_value: u128,
-    pub total_perp_pnl: i128,
     pub open_orders_margin_requirement: u128,
     tracked_market_margin_requirement: u128,
     pub fuel_deposits: u32,
@@ -174,14 +165,10 @@ impl MarginCalculation {
             margin_requirement: 0,
             margin_requirement_plus_buffer: 0,
             num_spot_liabilities: 0,
-            num_perp_liabilities: 0,
             all_oracles_valid: true,
-            with_perp_isolated_liability: false,
             with_spot_isolated_liability: false,
             total_spot_asset_value: 0,
             total_spot_liability_value: 0,
-            total_perp_liability_value: 0,
-            total_perp_pnl: 0,
             open_orders_margin_requirement: 0,
             tracked_market_margin_requirement: 0,
             fuel_deposits: 0,
@@ -235,10 +222,7 @@ impl MarginCalculation {
         Ok(())
     }
 
-    pub fn add_perp_liability(&mut self) -> VortexDexResult {
-        self.num_perp_liabilities = self.num_perp_liabilities.safe_add(1)?;
-        Ok(())
-    }
+
 
     #[cfg(feature = "vortex-rs")]
     pub fn add_spot_asset_value(&mut self, spot_asset_value: i128) -> VortexDexResult {
@@ -254,19 +238,6 @@ impl MarginCalculation {
         Ok(())
     }
 
-    #[cfg(feature = "vortex-rs")]
-    pub fn add_perp_liability_value(&mut self, perp_liability_value: u128) -> VortexDexResult {
-        self.total_perp_liability_value = self
-            .total_perp_liability_value
-            .safe_add(perp_liability_value)?;
-        Ok(())
-    }
-
-    #[cfg(feature = "vortex-rs")]
-    pub fn add_perp_pnl(&mut self, perp_pnl: i128) -> VortexDexResult {
-        self.total_perp_pnl = self.total_perp_pnl.safe_add(perp_pnl)?;
-        Ok(())
-    }
 
     pub fn update_all_oracles_valid(&mut self, valid: bool) {
         self.all_oracles_valid &= valid;
@@ -276,9 +247,7 @@ impl MarginCalculation {
         self.with_spot_isolated_liability |= isolated;
     }
 
-    pub fn update_with_perp_isolated_liability(&mut self, isolated: bool) {
-        self.with_perp_isolated_liability |= isolated;
-    }
+
 
     pub fn validate_num_spot_liabilities(&self) -> VortexDexResult {
         if self.num_spot_liabilities > 0 {
@@ -293,8 +262,7 @@ impl MarginCalculation {
     }
 
     pub fn get_num_of_liabilities(&self) -> VortexDexResult<u8> {
-        self.num_spot_liabilities
-            .safe_add(self.num_perp_liabilities)
+        Ok(self.num_spot_liabilities)
     }
 
     pub fn meets_margin_requirement(&self) -> bool {

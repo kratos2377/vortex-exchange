@@ -44,7 +44,6 @@ pub struct UserStats {
     pub number_of_sub_accounts_created: u16,
     /// Whether the user is a referrer. Sub account 0 can not be deleted if user is a referrer
     pub is_referrer: bool,
-    pub disable_update_perp_bid_ask_twap: bool,
     pub padding1: [u8; 2],
     /// accumulated fuel for token amounts of insurance
     pub fuel_insurance: u32,
@@ -276,7 +275,6 @@ impl Default for UserStats {
             number_of_sub_accounts: 0,
             number_of_sub_accounts_created: 0,
             is_referrer: false,
-            disable_update_perp_bid_ask_twap: true,
             padding1: [0; 2],
             fuel_insurance: 0,
             fuel_deposits: 0,

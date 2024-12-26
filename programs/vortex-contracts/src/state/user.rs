@@ -26,14 +26,12 @@ pub struct User {
     pub name: [u8; 32],
     pub game_stake_positions: [GameStakePosition; 4],
     pub spot_positions: [SpotPosition; 8],
-    pub perp_positions: [PerpPosition; 8],
     pub orders: [Order; 32],
     pub total_deposits: u64,
     pub total_withdraws: u64,
     pub status: u8,
     pub total_social_loss: u64,
     pub cumulative_spot_fees: i64,
-    pub cumulative_perp_funding: i64,
     pub liquidation_margin_freed: u64,
     pub last_active_slot: u64,
     pub next_order_id: u32,
@@ -629,26 +627,7 @@ pub struct GameStakePosition {
     pub player_staked_id: [u8; 16]
 }
 
-#[zero_copy(unsafe)]
-#[derive(Default, Debug, Eq, PartialEq, BorshDeserialize , BorshSerialize)]
-#[repr(C)]
-pub struct PerpPosition {
-    pub last_cumulative_funding_rate: i64,
-    pub base_asset_amount: i64,
-    pub quote_asset_amount: i64,
-    pub quote_break_even_amount: i64,
-    pub quote_entry_amount: i64,
-    pub open_bids: i64,
-    pub open_asks: i64,
-    pub settled_pnl: i64,
-    pub lp_shares: u64,
-    pub last_base_asset_amount_per_lp: i64,
-    pub last_quote_asset_amount_per_lp: i64,
-    pub remainder_base_asset_amount: i32,
-    pub market_index: u16,
-    pub open_orders: u8,
-    pub per_lp_base: i8,
-}
+
 
 #[zero_copy(unsafe)]
 #[repr(C)]
@@ -661,11 +640,9 @@ pub struct Order {
     /// precision: PRICE_PRECISION
     pub price: u64,
     /// The size of the order
-    /// precision for perps: BASE_PRECISION
     /// precision for spot: token mint precision
     pub base_asset_amount: u64,
     /// The amount of the order filled
-    /// precision for perps: BASE_PRECISION
     /// precision for spot: token mint precision
     pub base_asset_amount_filled: u64,
     /// The amount of quote filled for the order
@@ -687,13 +664,12 @@ pub struct Order {
     pub oracle_price_offset: i32,
     /// The id for the order. Each users has their own order id space
     pub order_id: u32,
-    /// The perp/spot market index
+    /// The spot market index
     pub market_index: u16,
     /// Whether the order is open or unused
     pub status: OrderStatus,
     /// The type of order
     pub order_type: OrderType,
-    /// Whether market is spot or perp
     pub market_type: MarketType,
     /// User generated order id. Can make it easier to place/cancel orders
     pub user_order_id: u8,

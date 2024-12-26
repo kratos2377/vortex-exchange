@@ -5,7 +5,7 @@ use anchor_spl::{token::Token, token_2022::Token2022, token_interface::{Mint, To
 use serum_dex::state::ToAlignedBytes;
 use crate::{casting::Cast, errors::DexError, safe_methods::SafeMath, spot_market::InsuranceFund, utils::constants::THIRTEEN_DAY};
 use crate::{ids::admin_hot_wallet, instructions::{account::get_token_mint, constraints::{deposit_not_paused , spot_market_valid}}, oracle::OraclePriceData, user::User, user_stats::UserStats, utils::{constants::{FUEL_START_TS, IF_FACTOR_PRECISION, LIQUIDATION_FEE_PRECISION, PERCENTAGE_PRECISION}, fees_utils::validate_fee_structure, spot_market_utils::validate_spot_market_vault_amount}};
-use crate::{controllers::{self, token::close_vault}, dex_state::{DexState, ExchangeStatus, FeeStructure, OracleGuardRails}, events::SpotMarketVaultDepositRecord, fulfillment_params::serum::{SerumContext, SerumV3FulfillmentConfig}, get_then_update_id, load, load_mut, operations::SpotOperation, oracle::{get_oracle_price, HistoricalIndexData, HistoricalOracleData, OracleSource}, oracle_map::OracleMap, safe_decrement, spot_market::{AssetTier, MarketStatus, PoolBalance, SpotBalanceType, SpotFulfillmentConfigStatus, SpotMarket}, utils::{constants::{DEFAULT_LIQUIDATION_MARGIN_BUFFER_RATIO, QUOTE_SPOT_MARKET_INDEX, SPOT_BALANCE_PRECISION, SPOT_CUMULATIVE_INTEREST_PRECISION, TWENTY_FOUR_HOUR}, spot_market_utils::get_token_amount, validation_utils::{validate_borrow_rate, validate_margin_weights}}, validate};
+use crate::{controllers::{self, token::close_vault}, dex_state::{DexState, ExchangeStatus, FeeStructure, OracleGuardRails}, events::SpotMarketVaultDepositRecord,  get_then_update_id, load, load_mut, operations::SpotOperation, oracle::{get_oracle_price, HistoricalIndexData, HistoricalOracleData, OracleSource}, oracle_map::OracleMap, safe_decrement, spot_market::{AssetTier, MarketStatus, PoolBalance, SpotBalanceType, SpotFulfillmentConfigStatus, SpotMarket}, utils::{constants::{DEFAULT_LIQUIDATION_MARGIN_BUFFER_RATIO, QUOTE_SPOT_MARKET_INDEX, SPOT_BALANCE_PRECISION, SPOT_CUMULATIVE_INTEREST_PRECISION, TWENTY_FOUR_HOUR}, spot_market_utils::get_token_amount, validation_utils::{validate_borrow_rate, validate_margin_weights}}, validate};
 
 pub const PTYH_PRICE_FEED_SEED_PREFIX: &[u8] = b"pyth_pull";
 
@@ -25,7 +25,6 @@ pub fn handle_admin_initialize(ctx: Context<Initialize>) -> Result<()> {
         number_of_sub_accounts: 0,
         number_of_markets: 0,
         number_of_spot_markets: 0,
-        min_perp_auction_duration: 10,
         default_market_order_time_in_force: 60,
         default_spot_auction_duration: 10,
         liquidation_margin_buffer_ratio: DEFAULT_LIQUIDATION_MARGIN_BUFFER_RATIO,
@@ -33,7 +32,6 @@ pub fn handle_admin_initialize(ctx: Context<Initialize>) -> Result<()> {
         signer: vortex_signer,
         signer_nonce: vortex_signer_nonce,
         srm_vault: Pubkey::default(),
-        perp_fee_structure: FeeStructure::perps_default(),
         spot_fee_structure: FeeStructure::spot_default(),
         lp_cooldown_time: 0,
         liquidation_duration: 0,
@@ -414,144 +412,7 @@ pub fn handle_delete_initialized_spot_market(
 }
 
 
-pub fn handle_initialize_serum_fulfillment_config(
-    ctx: Context<InitializeSerumFulfillmentConfig>,
-    market_index: u16,
-) -> Result<()> {
-    validate!(
-        market_index != QUOTE_SPOT_MARKET_INDEX,
-        DexError::InvalidSpotMarketAccount,
-        "Cant add serum market to quote asset"
-    )?;
 
-    let base_spot_market = load!(&ctx.accounts.base_spot_market)?;
-    let quote_spot_market = load!(&ctx.accounts.quote_spot_market)?;
-
-    let serum_program_id = crate::ids::serum_program::id();
-    validate!(
-        ctx.accounts.serum_program.key() == serum_program_id,
-        DexError::InvalidSerumProgram
-    )?;
-
-    let serum_market_key = ctx.accounts.serum_market.key();
-
-    let serum_context = SerumContext {
-        serum_program: &ctx.accounts.serum_program,
-        serum_market: &ctx.accounts.serum_market,
-        serum_open_orders: &ctx.accounts.serum_open_orders,
-    };
-
-    let market_state = serum_context.load_serum_market()?;
-
-    validate!(
-        identity(market_state.coin_mint) == base_spot_market.mint.to_aligned_bytes(),
-        DexError::InvalidSerumMarket,
-        "Invalid base mint"
-    )?;
-
-    validate!(
-        identity(market_state.pc_mint) == quote_spot_market.mint.to_aligned_bytes(),
-        DexError::InvalidSerumMarket,
-        "Invalid quote mint"
-    )?;
-
-    let market_step_size = market_state.coin_lot_size;
-    let valid_step_size = base_spot_market.order_step_size >= market_step_size
-        && base_spot_market
-            .order_step_size
-            .rem_euclid(market_step_size)
-            == 0;
-
-    validate!(
-        valid_step_size,
-        DexError::InvalidSerumMarket,
-        "base market step size ({}) not a multiple of serum step size ({})",
-        base_spot_market.order_step_size,
-        market_step_size
-    )?;
-
-    let market_tick_size = market_state.pc_lot_size;
-    let valid_tick_size = base_spot_market.order_tick_size >= market_tick_size
-        && base_spot_market
-            .order_tick_size
-            .rem_euclid(market_tick_size)
-            == 0;
-
-    validate!(
-        valid_tick_size,
-        DexError::InvalidSerumMarket,
-        "base market tick size ({}) not a multiple of serum tick size ({})",
-        base_spot_market.order_tick_size,
-        market_tick_size
-    )?;
-
-    drop(market_state);
-
-    let open_orders_seeds: &[&[u8]] = &[b"serum_open_orders", serum_market_key.as_ref()];
-    controllers::pda::seed_and_create_pda(
-        ctx.program_id,
-        &ctx.accounts.admin.to_account_info(),
-        &Rent::get()?,
-        size_of::<serum_dex::state::OpenOrders>() + 12,
-        &serum_program_id,
-        &ctx.accounts.system_program.to_account_info(),
-        &ctx.accounts.serum_open_orders,
-        open_orders_seeds,
-    )?;
-
-    let open_orders = serum_context.load_open_orders()?;
-    validate!(
-        open_orders.account_flags == 0,
-        DexError::InvalidSerumOpenOrders,
-        "Serum open orders already initialized"
-    )?;
-    drop(open_orders);
-
-    serum_context.invoke_init_open_orders(
-        &ctx.accounts.vortex_signer,
-        &ctx.accounts.rent,
-        ctx.accounts.state.signer_nonce,
-    )?;
-
-    let serum_fulfillment_config_key = ctx.accounts.serum_fulfillment_config.key();
-    let mut serum_fulfillment_config = ctx.accounts.serum_fulfillment_config.load_init()?;
-    *serum_fulfillment_config = serum_context
-        .to_serum_v3_fulfillment_config(&serum_fulfillment_config_key, market_index)?;
-
-    Ok(())
-}
-
-pub fn handle_update_serum_fulfillment_config_status(
-    ctx: Context<UpdateSerumFulfillmentConfig>,
-    status: SpotFulfillmentConfigStatus,
-) -> Result<()> {
-    let mut config = load_mut!(ctx.accounts.serum_fulfillment_config)?;
-    msg!("config.status {:?} -> {:?}", config.status, status);
-    config.status = status;
-    Ok(())
-}
-
-pub fn handle_update_serum_vault(ctx: Context<UpdateSerumVault>) -> Result<()> {
-    let vault = &ctx.accounts.srm_vault;
-    validate!(
-        vault.mint == crate::ids::srm_mint::id() || vault.mint == crate::ids::msrm_mint::id(),
-        DexError::InvalidSrmVault,
-        "vault did not hav srm or msrm mint"
-    )?;
-
-    validate!(
-        vault.owner == ctx.accounts.state.signer,
-        DexError::InvalidVaultOwner,
-        "vault owner was not program signer"
-    )?;
-
-    let state = &mut ctx.accounts.state;
-
-    msg!("state.srm_vault {:?} -> {:?}", state.srm_vault, vault.key());
-    state.srm_vault = vault.key();
-
-    Ok(())
-}
 
 #[derive(Accounts)]
 #[instruction(market_index: u16)]
@@ -1307,18 +1168,6 @@ pub fn handle_update_spot_market_if_paused_operations(
     Ok(())
 }
 
-#[access_control(
-    spot_market_valid(&ctx.accounts.spot_market)
-)]
-pub fn handle_update_spot_market_name(
-    ctx: Context<AdminUpdateSpotMarket>,
-    name: [u8; 32],
-) -> Result<()> {
-    let mut spot_market = load_mut!(ctx.accounts.spot_market)?;
-    msg!("spot_market.name: {:?} -> {:?}", spot_market.name, name);
-    spot_market.name = name;
-    Ok(())
-}
 
 
 pub fn handle_update_spot_fee_structure(
@@ -1365,49 +1214,6 @@ pub fn handle_update_liquidation_duration(
     Ok(())
 }
 
-pub fn handle_update_liquidation_margin_buffer_ratio(
-    ctx: Context<AdminUpdateState>,
-    liquidation_margin_buffer_ratio: u32,
-) -> Result<()> {
-    msg!(
-        "liquidation_margin_buffer_ratio: {} -> {}",
-        ctx.accounts.state.liquidation_margin_buffer_ratio,
-        liquidation_margin_buffer_ratio
-    );
-
-    ctx.accounts.state.liquidation_margin_buffer_ratio = liquidation_margin_buffer_ratio;
-    Ok(())
-}
-
-pub fn handle_update_oracle_guard_rails(
-    ctx: Context<AdminUpdateState>,
-    oracle_guard_rails: OracleGuardRails,
-) -> Result<()> {
-    msg!(
-        "oracle_guard_rails: {:?} -> {:?}",
-        ctx.accounts.state.oracle_guard_rails,
-        oracle_guard_rails
-    );
-
-    ctx.accounts.state.oracle_guard_rails = oracle_guard_rails;
-    Ok(())
-}
-
-
-pub fn handle_update_state_settlement_duration(
-    ctx: Context<AdminUpdateState>,
-    settlement_duration: u16,
-) -> Result<()> {
-    msg!(
-        "settlement_duration: {} -> {}",
-        ctx.accounts.state.settlement_duration,
-        settlement_duration
-    );
-
-    ctx.accounts.state.settlement_duration = settlement_duration;
-    Ok(())
-}
-
 
 pub fn handle_update_state_max_initialize_user_fee(
     ctx: Context<AdminUpdateState>,
@@ -1420,83 +1226,6 @@ pub fn handle_update_state_max_initialize_user_fee(
     );
 
     ctx.accounts.state.max_initialize_user_fee = max_initialize_user_fee;
-    Ok(())
-}
-
-
-pub fn handle_update_spot_market_fuel(
-    ctx: Context<AdminUpdateSpotMarket>,
-    fuel_boost_deposits: Option<u8>,
-    fuel_boost_borrows: Option<u8>,
-    fuel_boost_taker: Option<u8>,
-    fuel_boost_maker: Option<u8>,
-    fuel_boost_insurance: Option<u8>,
-) -> Result<()> {
-    let spot_market = &mut load_mut!(ctx.accounts.spot_market)?;
-    msg!("spot market {}", spot_market.market_index);
-
-    if let Some(fuel_boost_taker) = fuel_boost_taker {
-        msg!(
-            "spot_market.fuel_boost_taker: {:?} -> {:?}",
-            spot_market.fuel_boost_taker,
-            fuel_boost_taker
-        );
-        spot_market.fuel_boost_taker = fuel_boost_taker;
-    } else {
-        msg!("spot_market.fuel_boost_taker: unchanged");
-    }
-
-    if let Some(fuel_boost_maker) = fuel_boost_maker {
-        msg!(
-            "spot_market.fuel_boost_maker: {:?} -> {:?}",
-            spot_market.fuel_boost_maker,
-            fuel_boost_maker
-        );
-        spot_market.fuel_boost_maker = fuel_boost_maker;
-    } else {
-        msg!("spot_market.fuel_boost_maker: unchanged");
-    }
-
-    if let Some(fuel_boost_deposits) = fuel_boost_deposits {
-        msg!(
-            "spot_market.fuel_boost_deposits: {:?} -> {:?}",
-            spot_market.fuel_boost_deposits,
-            fuel_boost_deposits
-        );
-        spot_market.fuel_boost_deposits = fuel_boost_deposits;
-    } else {
-        msg!("spot_market.fuel_boost_deposits: unchanged");
-    }
-
-    if let Some(fuel_boost_borrows) = fuel_boost_borrows {
-        msg!(
-            "spot_market.fuel_boost_borrows: {:?} -> {:?}",
-            spot_market.fuel_boost_borrows,
-            fuel_boost_borrows
-        );
-        spot_market.fuel_boost_borrows = fuel_boost_borrows;
-    } else {
-        msg!("spot_market.fuel_boost_borrows: unchanged");
-    }
-
-    if let Some(fuel_boost_insurance) = fuel_boost_insurance {
-        msg!(
-            "spot_market.fuel_boost_insurance: {:?} -> {:?}",
-            spot_market.fuel_boost_insurance,
-            fuel_boost_insurance
-        );
-        spot_market.fuel_boost_insurance = fuel_boost_insurance;
-    } else {
-        msg!("spot_market.fuel_boost_insurance: unchanged");
-    }
-
-    Ok(())
-}
-
-
-pub fn handle_update_admin(ctx: Context<AdminUpdateState>, admin: Pubkey) -> Result<()> {
-    msg!("admin: {:?} -> {:?}", ctx.accounts.state.admin, admin);
-    ctx.accounts.state.admin = admin;
     Ok(())
 }
 
@@ -1514,19 +1243,6 @@ pub fn handle_update_whitelist_mint(
     Ok(())
 }
 
-pub fn handle_update_discount_mint(
-    ctx: Context<AdminUpdateState>,
-    discount_mint: Pubkey,
-) -> Result<()> {
-    msg!(
-        "discount_mint: {:?} -> {:?}",
-        ctx.accounts.state.discount_mint,
-        discount_mint
-    );
-
-    ctx.accounts.state.discount_mint = discount_mint;
-    Ok(())
-}
 
 pub fn handle_update_exchange_status(
     ctx: Context<AdminUpdateState>,
@@ -1583,65 +1299,7 @@ pub fn handle_update_spot_auction_duration(
 // }
 
 
-#[derive(Accounts)]
-#[instruction(market_index: u16)]
-pub struct InitializeSerumFulfillmentConfig<'info> {
-    #[account(
-        seeds = [b"spot_market", market_index.to_le_bytes().as_ref()],
-        bump,
-    )]
-    pub base_spot_market: AccountLoader<'info, SpotMarket>,
-    #[account(
-        seeds = [b"spot_market", 0_u16.to_le_bytes().as_ref()],
-        bump,
-    )]
-    pub quote_spot_market: AccountLoader<'info, SpotMarket>,
-    #[account(
-        mut,
-        has_one = admin
-    )]
-    pub state: Box<Account<'info, DexState>>,
-    /// CHECK: checked in ix
-    pub serum_program: AccountInfo<'info>,
-    /// CHECK: checked in ix
-    pub serum_market: AccountInfo<'info>,
-    #[account(
-        mut,
-        seeds = [b"serum_open_orders".as_ref(), serum_market.key.as_ref()],
-        bump,
-    )]
-    /// CHECK: checked in ix
-    pub serum_open_orders: AccountInfo<'info>,
-    #[account(
-        constraint = state.signer.eq(&vortex_signer.key())
-    )]
-    /// CHECK: program signer
-    pub vortex_signer: AccountInfo<'info>,
-    #[account(
-        init,
-        seeds = [b"serum_fulfillment_config".as_ref(), serum_market.key.as_ref()],
-        space = SerumV3FulfillmentConfig::SIZE,
-        bump,
-        payer = admin,
-    )]
-    pub serum_fulfillment_config: AccountLoader<'info, SerumV3FulfillmentConfig>,
-    #[account(mut)]
-    pub admin: Signer<'info>,
-    pub rent: Sysvar<'info, Rent>,
-    pub system_program: Program<'info, System>,
-}
 
-#[derive(Accounts)]
-pub struct UpdateSerumFulfillmentConfig<'info> {
-    #[account(
-        has_one = admin
-    )]
-    pub state: Box<Account<'info, DexState>>,
-    #[account(mut)]
-    pub serum_fulfillment_config: AccountLoader<'info, SerumV3FulfillmentConfig>,
-    #[account(mut)]
-    pub admin: Signer<'info>,
-}
 
 
 #[derive(Accounts)]

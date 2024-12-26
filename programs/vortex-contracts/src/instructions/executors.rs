@@ -1,14 +1,14 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token_interface::{TokenAccount, TokenInterface};
 
-use crate::{controllers, dex_state::DexState, errors::DexError, fulfillment_params::{serum::SerumFulfillmentParams, vortex::MatchFulfillmentParams}, load, load_mut, profit_and_loss::SettlePnlMode, spot_fulfillment_params::SpotFulfillmentParams, spot_market_map::{get_writable_spot_market_set, get_writable_spot_market_set_from_many, MarketSet}, user::{MarketType, OrderStatus, User}, user_map::{load_user_maps, UserMap, UserStatsMap}, user_stats::UserStats, utils::{self, constants::{QUOTE_PRECISION_I128, QUOTE_SPOT_MARKET_INDEX}, margin_utils::calculate_user_equity, spot_market_utils::validate_spot_market_vault_amount, user_utils::validate_user_is_idle}, validate};
+use crate::{controllers, dex_state::DexState, errors::DexError, fulfillment_params::{vortex::MatchFulfillmentParams}, load, load_mut, profit_and_loss::SettlePnlMode, spot_fulfillment_params::SpotFulfillmentParams, spot_market_map::{get_writable_spot_market_set, get_writable_spot_market_set_from_many, MarketSet}, user::{MarketType, OrderStatus, User}, user_map::{load_user_maps, UserMap, UserStatsMap}, user_stats::UserStats, utils::{self, constants::{QUOTE_PRECISION_I128, QUOTE_SPOT_MARKET_INDEX}, margin_utils::calculate_user_equity, spot_market_utils::validate_spot_market_vault_amount, user_utils::validate_user_is_idle}, validate};
 
 use super::{account::{get_token_mint, load_maps, AccountMaps}, constraints::{can_sign_for_user, exchange_not_paused, fill_not_paused, is_stats_for_user, liq_not_paused, withdraw_not_paused}};
 
+// Add multiple different dex support
 #[derive(Clone, Copy, AnchorSerialize, AnchorDeserialize, PartialEq, Debug, Eq, Default)]
 pub enum SpotFulfillmentType {
     #[default]
-    SerumV3,
     Match,
 }
 
@@ -73,19 +73,7 @@ fn fill_spot_order<'c: 'info, 'info>(
         _ => (UserMap::empty(), UserStatsMap::empty()),
     };
 
-    let mut fulfillment_params: Box<dyn SpotFulfillmentParams> = match fulfillment_type {
-        SpotFulfillmentType::SerumV3 => {
-            let base_market = spot_market_map.get_ref(&market_index)?;
-            let quote_market = spot_market_map.get_quote_spot_market()?;
-            Box::new(SerumFulfillmentParams::new(
-                remaining_accounts_iter,
-                &ctx.accounts.state,
-                &base_market,
-                &quote_market,
-                clock.unix_timestamp,
-            )?)
-        }
-        SpotFulfillmentType::Match => {
+    let mut fulfillment_params: Box<dyn SpotFulfillmentParams> = {
             let base_market = spot_market_map.get_ref(&market_index)?;
             let quote_market = spot_market_map.get_quote_spot_market()?;
             Box::new(MatchFulfillmentParams::new(
@@ -93,8 +81,7 @@ fn fill_spot_order<'c: 'info, 'info>(
                 &base_market,
                 &quote_market,
             )?)
-        }
-    };
+        };
 
     controllers::orders::fill_spot_order(
         order_id,
@@ -307,73 +294,7 @@ pub fn handle_liquidate_spot<'c: 'info, 'info>(
 }
 
 
-#[access_control(
-    withdraw_not_paused(&ctx.accounts.state)
-)]
-pub fn handle_resolve_perp_bankruptcy<'c: 'info, 'info>(
-    ctx: Context<'_, '_, 'c, 'info, ResolveBankruptcy<'info>>,
-    quote_spot_market_index: u16,
-    market_index: u16,
-) -> Result<()> {
-    let clock = Clock::get()?;
-    let now = clock.unix_timestamp;
 
-    let user_key = ctx.accounts.user.key();
-    let liquidator_key = ctx.accounts.liquidator.key();
-
-    validate!(
-        user_key != liquidator_key,
-        DexError::UserCantLiquidateThemself
-    )?;
-
-    validate!(
-        quote_spot_market_index == QUOTE_SPOT_MARKET_INDEX,
-        DexError::InvalidSpotMarketAccount
-    )?;
-
-    let user = &mut load_mut!(ctx.accounts.user)?;
-    let liquidator = &mut load_mut!(ctx.accounts.liquidator)?;
-    let state = &ctx.accounts.state;
-
-    let remaining_accounts_iter = &mut ctx.remaining_accounts.iter().peekable();
-    let AccountMaps {
-        spot_market_map,
-        mut oracle_map,
-    } = load_maps(
-        remaining_accounts_iter,
-        &get_writable_spot_market_set(quote_spot_market_index),
-        clock.slot,
-        Some(state.oracle_guard_rails),
-    )?;
-
-    let mint = get_token_mint(remaining_accounts_iter)?;
-
-    {
-        let spot_market = &mut spot_market_map.get_ref_mut(&quote_spot_market_index)?;
-
-        // reload the spot market vault balance so it's up-to-date
-        ctx.accounts.spot_market_vault.reload()?;
-        ctx.accounts.insurance_fund_vault.reload()?;
-        utils::spot_market_utils::validate_spot_market_vault_amount(
-            spot_market,
-            ctx.accounts.spot_market_vault.amount,
-        )?;
-    }
-
-
-
-    {
-        let spot_market = &mut spot_market_map.get_ref_mut(&quote_spot_market_index)?;
-        // reload the spot market vault balance so it's up-to-date
-        ctx.accounts.spot_market_vault.reload()?;
-        utils::spot_market_utils::validate_spot_market_vault_amount(
-            spot_market,
-            ctx.accounts.spot_market_vault.amount,
-        )?;
-    }
-
-    Ok(())
-}
 
 #[access_control(
     withdraw_not_paused(&ctx.accounts.state)
@@ -583,7 +504,7 @@ pub struct ResolveBankruptcy<'info> {
     pub spot_market_vault: Box<InterfaceAccount<'info, TokenAccount>>,
     #[account(
         mut,
-        seeds = [b"insurance_fund_vault".as_ref(), spot_market_index.to_le_bytes().as_ref()], // todo: market_index=0 hardcode for perps?
+        seeds = [b"insurance_fund_vault".as_ref(), spot_market_index.to_le_bytes().as_ref()],
         bump,
     )]
     pub insurance_fund_vault: Box<InterfaceAccount<'info, TokenAccount>>,

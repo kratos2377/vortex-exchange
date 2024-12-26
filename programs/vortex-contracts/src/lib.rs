@@ -69,13 +69,7 @@ pub mod vortex_contracts {
         handle_withdraw(ctx, market_index, amount, reduce_only)
     }
 
-    pub fn transfer_deposit<'c: 'info, 'info>(
-        ctx: Context<'_, '_, 'c, 'info, TransferDeposit<'info>>,
-        market_index: u16,
-        amount: u64,
-    ) -> anchor_lang::Result<()> {
-        handle_transfer_deposit(ctx, market_index, amount)
-    }
+   
 
     pub fn cancel_order<'c: 'info, 'info>(
         ctx: Context<'_, '_, 'c, 'info, CancelOrder>,
@@ -107,21 +101,7 @@ pub mod vortex_contracts {
         handle_cancel_orders_by_ids(ctx, order_ids)
     }
 
-    pub fn modify_order<'c: 'info, 'info>(
-        ctx: Context<'_, '_, 'c, 'info, CancelOrder<'info>>,
-        order_id: Option<u32>,
-        modify_order_params: ModifyOrderParams,
-    ) -> Result<()> {
-        handle_modify_order(ctx, order_id, modify_order_params)
-    }
 
-    pub fn modify_order_by_user_id<'c: 'info, 'info>(
-        ctx: Context<'_, '_, 'c, 'info, CancelOrder<'info>>,
-        user_order_id: u8,
-        modify_order_params: ModifyOrderParams,
-    ) -> Result<()> {
-        handle_modify_order_by_user_order_id(ctx, user_order_id, modify_order_params)
-    }
     
 
     pub fn place_spot_order<'c: 'info, 'info>(
@@ -303,24 +283,6 @@ pub mod vortex_contracts {
         handle_delete_initialized_spot_market(ctx, market_index)
     }
 
-    pub fn initialize_serum_fulfillment_config(
-        ctx: Context<InitializeSerumFulfillmentConfig>,
-        market_index: u16,
-    ) -> Result<()> {
-        handle_initialize_serum_fulfillment_config(ctx, market_index)
-    }
-
-    pub fn update_serum_fulfillment_config_status(
-        ctx: Context<UpdateSerumFulfillmentConfig>,
-        status: SpotFulfillmentConfigStatus,
-    ) -> Result<()> {
-        handle_update_serum_fulfillment_config_status(ctx, status)
-    }
-
-
-    pub fn update_serum_vault(ctx: Context<UpdateSerumVault>) -> Result<()> {
-        handle_update_serum_vault(ctx)
-    }
 
 
     pub fn deposit_into_spot_market_vault<'c: 'info, 'info>(
@@ -464,12 +426,6 @@ pub mod vortex_contracts {
         handle_update_spot_market_step_size_and_tick_size(ctx, step_size, tick_size)
     }
 
-    pub fn update_spot_market_min_order_size(
-        ctx: Context<AdminUpdateSpotMarket>,
-        order_size: u64,
-    ) -> Result<()> {
-        handle_update_spot_market_min_order_size(ctx, order_size)
-    }
 
     pub fn update_spot_market_orders_enabled(
         ctx: Context<AdminUpdateSpotMarket>,
@@ -483,13 +439,6 @@ pub mod vortex_contracts {
         paused_operations: u8,
     ) -> Result<()> {
         handle_update_spot_market_if_paused_operations(ctx, paused_operations)
-    }
-
-    pub fn update_spot_market_name(
-        ctx: Context<AdminUpdateSpotMarket>,
-        name: [u8; 32],
-    ) -> Result<()> {
-        handle_update_spot_market_name(ctx, name)
     }
 
 
@@ -514,26 +463,6 @@ pub mod vortex_contracts {
         handle_update_liquidation_duration(ctx, liquidation_duration)
     }
 
-    pub fn update_liquidation_margin_buffer_ratio(
-        ctx: Context<AdminUpdateState>,
-        liquidation_margin_buffer_ratio: u32,
-    ) -> Result<()> {
-        handle_update_liquidation_margin_buffer_ratio(ctx, liquidation_margin_buffer_ratio)
-    }
-
-    pub fn update_oracle_guard_rails(
-        ctx: Context<AdminUpdateState>,
-        oracle_guard_rails: OracleGuardRails,
-    ) -> Result<()> {
-        handle_update_oracle_guard_rails(ctx, oracle_guard_rails)
-    }
-
-    pub fn update_state_settlement_duration(
-        ctx: Context<AdminUpdateState>,
-        settlement_duration: u16,
-    ) -> Result<()> {
-        handle_update_state_settlement_duration(ctx, settlement_duration)
-    }
 
 
     pub fn update_state_max_initialize_user_fee(
@@ -544,45 +473,6 @@ pub mod vortex_contracts {
     }
 
 
-    pub fn update_spot_market_fuel(
-        ctx: Context<AdminUpdateSpotMarket>,
-        fuel_boost_deposits: Option<u8>,
-        fuel_boost_borrows: Option<u8>,
-        fuel_boost_taker: Option<u8>,
-        fuel_boost_maker: Option<u8>,
-        fuel_boost_insurance: Option<u8>,
-    ) -> Result<()> {
-        handle_update_spot_market_fuel(
-            ctx,
-            fuel_boost_deposits,
-            fuel_boost_borrows,
-            fuel_boost_taker,
-            fuel_boost_maker,
-            fuel_boost_insurance,
-        )
-    }
-
-    pub fn init_user_fuel(
-        ctx: Context<InitUserFuel>,
-        fuel_boost_deposits: Option<u32>,
-        fuel_boost_borrows: Option<u32>,
-        fuel_boost_taker: Option<u32>,
-        fuel_boost_maker: Option<u32>,
-        fuel_boost_insurance: Option<u32>,
-    ) -> Result<()> {
-        handle_init_user_fuel(
-            ctx,
-            fuel_boost_deposits,
-            fuel_boost_borrows,
-            fuel_boost_taker,
-            fuel_boost_maker,
-            fuel_boost_insurance,
-        )
-    }
-
-    pub fn update_admin(ctx: Context<AdminUpdateState>, admin: Pubkey) -> Result<()> {
-        handle_update_admin(ctx, admin)
-    }
 
     pub fn update_whitelist_mint(
         ctx: Context<AdminUpdateState>,
@@ -591,12 +481,6 @@ pub mod vortex_contracts {
         handle_update_whitelist_mint(ctx, whitelist_mint)
     }
 
-    pub fn update_discount_mint(
-        ctx: Context<AdminUpdateState>,
-        discount_mint: Pubkey,
-    ) -> Result<()> {
-        handle_update_discount_mint(ctx, discount_mint)
-    }
 
     pub fn update_exchange_status(
         ctx: Context<AdminUpdateState>,
@@ -606,12 +490,6 @@ pub mod vortex_contracts {
     }
 
 
-    pub fn update_spot_auction_duration(
-        ctx: Context<AdminUpdateState>,
-        default_spot_auction_duration: u8,
-    ) -> Result<()> {
-        handle_update_spot_auction_duration(ctx, default_spot_auction_duration)
-    }
 
     // pub fn initialize_pyth_pull_oracle(
     //     ctx: Context<InitPythPullPriceFeed>,

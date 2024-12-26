@@ -11,7 +11,6 @@ pub mod margin_utils;
 pub mod constants;
 pub mod order_utils;
 pub mod auction_utils;
-pub mod serum_utils;
 pub mod matching_utils;
 pub mod fees_utils;
 pub mod helper_utils;

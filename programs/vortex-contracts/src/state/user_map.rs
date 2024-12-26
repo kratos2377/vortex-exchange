@@ -147,7 +147,7 @@ impl<'a> UserStatsMap<'a> {
         };
 
         match loader.load_mut() {
-            Ok(perp_market) => Ok(perp_market),
+            Ok(market) => Ok(market),
             Err(e) => {
                 let caller = Location::caller();
                 msg!("{:?}", e);

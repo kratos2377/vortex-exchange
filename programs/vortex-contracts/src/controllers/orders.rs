@@ -31,7 +31,6 @@ pub fn cancel_order(
         market_type
     );
 
-    let is_perp_order = order_market_type != MarketType::Spot;
 
     validate!(order_status == OrderStatus::Open, DexError::OrderNotOpen)?;
 
@@ -2517,7 +2516,6 @@ pub fn trigger_spot_order(
             oracle_price_data,
             slot,
             30,
-            None,
         )?;
 
         if user.orders[order_index].has_auction() {
@@ -2613,14 +2611,11 @@ pub fn trigger_spot_order(
     Ok(())
 }
 
-//Currently perp maket is represented as a u64 
-// it will be changed later
 fn update_trigger_order_params(
     order: &mut Order,
     oracle_price_data: &OraclePriceData,
     slot: u64,
     min_auction_duration: u8,
-    perp_market: Option<u64>,
 ) -> VortexDexResult {
     order.trigger_condition = match order.trigger_condition {
         OrderTriggerCondition::Above => OrderTriggerCondition::TriggeredAbove,

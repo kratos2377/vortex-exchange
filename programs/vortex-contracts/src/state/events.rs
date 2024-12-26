@@ -226,11 +226,7 @@ pub struct SpotBankruptcyRecord {
 #[derive(Clone, Copy, BorshSerialize, BorshDeserialize, PartialEq, Eq, Default)]
 pub enum LiquidationType {
     #[default]
-    LiquidatePerp,
     LiquidateSpot,
-    LiquidateBorrowForPerpPnl,
-    LiquidatePerpPnlForDeposit,
-    PerpBankruptcy,
     SpotBankruptcy,
 }
 

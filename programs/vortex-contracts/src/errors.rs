@@ -61,6 +61,8 @@ pub enum DexError {
     WhitelistTokenNotFound,
     #[msg("Invalid discount token")]
     InvalidDiscountToken,
+    #[msg("Margin Trading Disabled")]
+    MarginTradingDisabled,
     #[msg("Discount token not found")]
     DiscountTokenNotFound,
     #[msg("Referrer not found")]
@@ -161,12 +163,10 @@ pub enum DexError {
     CantExpireOrders,
     #[msg("CouldNotLoadMarketData")]
     CouldNotLoadMarketData,
-    #[msg("PerpMarketNotFound")]
-    PerpMarketNotFound,
+   
     #[msg("InvalidMarketAccount")]
     InvalidMarketAccount,
-    #[msg("UnableToLoadMarketAccount")]
-    UnableToLoadPerpMarketAccount,
+
     #[msg("MarketWrongMutability")]
     MarketWrongMutability,
     #[msg("UnableToCastUnixTime")]
@@ -247,10 +247,6 @@ pub enum DexError {
     WrongSpotBalanceType,
     #[msg("UserCantLiquidateThemself")]
     UserCantLiquidateThemself,
-    #[msg("InvalidPerpPositionToLiquidate")]
-    InvalidPerpPositionToLiquidate,
-    #[msg("InvalidBaseAssetAmountForLiquidatePerp")]
-    InvalidBaseAssetAmountForLiquidatePerp,
     #[msg("InvalidPositionLastFundingRate")]
     InvalidPositionLastFundingRate,
     #[msg("InvalidPositionDelta")]
@@ -267,8 +263,6 @@ pub enum DexError {
     DefaultError,
     #[msg("Insufficient LP tokens")]
     InsufficientLPTokens,
-    #[msg("Cant LP with a market position")]
-    CantLPWithPerpPosition,
     #[msg("Unable to burn LP tokens")]
     UnableToBurnLPTokens,
     #[msg("Trying to remove liqudity too fast after adding it")]
@@ -314,31 +308,13 @@ pub enum DexError {
     #[msg("Reduce Only Withdraw Increased Risk")]
     ReduceOnlyWithdrawIncreasedRisk,
     #[msg("Max Open Interest")]
-    MaxOpenInterest,
-    #[msg("Cant Resolve Perp Bankruptcy")]
-    CantResolvePerpBankruptcy,
-    #[msg("Liquidation Doesnt Satisfy Limit Price")]
     LiquidationDoesntSatisfyLimitPrice,
     #[msg("Margin Trading Disabled")]
-    MarginTradingDisabled,
-    #[msg("Invalid Market Status to Settle Perp Pnl")]
     InvalidMarketStatusToSettlePnl,
-    #[msg("PerpMarketNotInSettlement")]
-    PerpMarketNotInSettlement,
-    #[msg("PerpMarketNotInReduceOnly")]
-    PerpMarketNotInReduceOnly,
-    #[msg("PerpMarketSettlementBufferNotReached")]
-    PerpMarketSettlementBufferNotReached,
-    #[msg("PerpMarketSettlementUserHasOpenOrders")]
-    PerpMarketSettlementUserHasOpenOrders,
-    #[msg("PerpMarketSettlementUserHasActiveLP")]
-    PerpMarketSettlementUserHasActiveLP,
     #[msg("UnableToSettleExpiredUserPosition")]
     UnableToSettleExpiredUserPosition,
     #[msg("UnequalMarketIndexForSpotTransfer")]
     UnequalMarketIndexForSpotTransfer,
-    #[msg("InvalidPerpPositionDetected")]
-    InvalidPerpPositionDetected,
     #[msg("InvalidSpotPositionDetected")]
     InvalidSpotPositionDetected,
     #[msg("InvalidAmmDetected")]
@@ -361,16 +337,6 @@ pub enum DexError {
     RevenueSettingsCannotSettleToIF,
     #[msg("NoRevenueToSettleToIF")]
     NoRevenueToSettleToIF,
-    #[msg("NoAmmPerpPnlDeficit")]
-    NoAmmPerpPnlDeficit,
-    #[msg("SufficientPerpPnlPool")]
-    SufficientPerpPnlPool,
-    #[msg("InsufficientPerpPnlPool")]
-    InsufficientPerpPnlPool,
-    #[msg("PerpPnlDeficitBelowThreshold")]
-    PerpPnlDeficitBelowThreshold,
-    #[msg("MaxRevenueWithdrawPerPeriodReached")]
-    MaxRevenueWithdrawPerPeriodReached,
     #[msg("InvalidSpotPositionDetected")]
     MaxIFWithdrawReached,
     #[msg("NoIFWithdrawAvailable")]
@@ -441,8 +407,6 @@ pub enum DexError {
     InvalidSpotPosition,
     #[msg("Cant transfer between same user account")]
     CantTransferBetweenSameUserAccount,
-    #[msg("Invalid Perp Position")]
-    InvalidPerpPosition,
     #[msg("Unable To Get Limit Price")]
     UnableToGetLimitPrice,
     #[msg("Invalid Liquidation")]
@@ -459,8 +423,6 @@ pub enum DexError {
     InvalidOracleForSettlePnl,
     #[msg("MarginOrdersOpen")]
     MarginOrdersOpen,
-    #[msg("TierViolationLiquidatingPerpPnl")]
-    TierViolationLiquidatingPerpPnl,
     #[msg("CouldNotLoadUserData")]
     CouldNotLoadUserData,
     #[msg("UserWrongMutability")]
@@ -511,8 +473,6 @@ pub enum DexError {
     FundingWasNotUpdated,
     #[msg("ImpossibleFill")]
     ImpossibleFill,
-    #[msg("CantUpdatePerpBidAskTwap")]
-    CantUpdatePerpBidAskTwap,
     #[msg("UserReduceOnly")]
     UserReduceOnly,
     #[msg("InvalidMarginCalculation")]

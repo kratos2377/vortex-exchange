@@ -11,7 +11,7 @@ use solana_program::{program::invoke, system_instruction::transfer, sysvar::inst
 use crate::safe_methods::SafeMath;
 use crate::{casting::Cast,
      controllers::{self, orders::ModifyOrderId, spot_balance::update_revenue_pool_balances,
-         spot_position::{charge_withdraw_fee, update_spot_balances_and_cumulative_deposits, update_spot_balances_and_cumulative_deposits_with_limits}}, errors::DexError, get_then_update_id, ids::{jupiter_mainnet_4, jupiter_mainnet_6, marinade_mainnet, serum_program}, instructions::{account::{get_token_mint, load_maps, AccountMaps}, constraints::{can_sign_for_user, is_stats_for_user}}, load, load_mut, oracle::{PrelaunchOracle, PrelaunchOracleParams}, print_error, safe_decrement, safe_increment, spot_market::SpotMarket, state::{dex_state::{DexState, ExchangeStatus}, events::{DepositDirection, DepositExplanation, DepositRecord, NewUserAccountRecord, OrderActionExplanation, SwapRecord}, fulfillment_params::{serum::SerumFulfillmentParams, vortex::MatchFulfillmentParams}, operations::SpotOperation, oracle::StrictOraclePrice, order_params::{ModifyOrderParams, OrderParams, PlaceOrderOptions, PostOnlyParam}, position::PositionDirection, spot_fulfillment_params::SpotFulfillmentParams, spot_market::{MarketStatus, SpotBalanceType}, spot_market_map::{get_writable_spot_market_set, get_writable_spot_market_set_from_many, MarketSet}, user::{MarketType, OrderType, User}, user_map::{load_user_maps, UserMap, UserStatsMap}, user_stats::UserStats}, utils::{self, constants::{QUOTE_SPOT_MARKET_INDEX, THIRTEEN_DAY}, liquidation_utils::is_user_being_liquidated, margin_utils::{calculate_max_withdrawable_amount, meets_withdraw_margin_requirement, validate_spot_margin_trading, MarginRequirementType}, spot_market_utils::{self, get_token_value}, swap_utils::{calculate_swap_price, validate_price_bands_for_swap}, token_utils, validation_utils::validate_user_deletion}, validate};
+         spot_position::{charge_withdraw_fee, update_spot_balances_and_cumulative_deposits, update_spot_balances_and_cumulative_deposits_with_limits}}, errors::DexError, get_then_update_id, ids::{jupiter_mainnet_4, jupiter_mainnet_6, marinade_mainnet, serum_program}, instructions::{account::{get_token_mint, load_maps, AccountMaps}, constraints::{can_sign_for_user, is_stats_for_user}}, load, load_mut, oracle::{PrelaunchOracle}, print_error, safe_decrement, safe_increment, spot_market::SpotMarket, state::{dex_state::{DexState, ExchangeStatus}, events::{DepositDirection, DepositExplanation, DepositRecord, NewUserAccountRecord, OrderActionExplanation, SwapRecord}, fulfillment_params::{vortex::MatchFulfillmentParams}, operations::SpotOperation, oracle::StrictOraclePrice, order_params::{ModifyOrderParams, OrderParams, PlaceOrderOptions, PostOnlyParam}, position::PositionDirection, spot_fulfillment_params::SpotFulfillmentParams, spot_market::{MarketStatus, SpotBalanceType}, spot_market_map::{get_writable_spot_market_set, get_writable_spot_market_set_from_many, MarketSet}, user::{MarketType, OrderType, User}, user_map::{load_user_maps, UserMap, UserStatsMap}, user_stats::UserStats}, utils::{self, constants::{QUOTE_SPOT_MARKET_INDEX, THIRTEEN_DAY}, liquidation_utils::is_user_being_liquidated, margin_utils::{calculate_max_withdrawable_amount, meets_withdraw_margin_requirement, validate_spot_margin_trading, MarginRequirementType}, spot_market_utils::{self, get_token_value}, swap_utils::{calculate_swap_price, validate_price_bands_for_swap}, token_utils, validation_utils::validate_user_deletion}, validate};
 use crate::instructions::constraints::{fill_not_paused, exchange_not_paused , withdraw_not_paused, deposit_not_paused};
 
 use super::{account::get_token_interface, executors::SpotFulfillmentType};
@@ -947,20 +947,7 @@ pub fn handle_place_and_take_spot_order<'c: 'info, 'info>(
 
     let is_immediate_or_cancel = params.immediate_or_cancel;
 
-    let mut fulfillment_params: Box<dyn SpotFulfillmentParams> = match fulfillment_type {
-        SpotFulfillmentType::SerumV3 => {
-            let base_market = spot_market_map.get_ref(&market_index)?;
-            let quote_market = spot_market_map.get_quote_spot_market()?;
-            Box::new(SerumFulfillmentParams::new(
-                remaining_accounts_iter,
-                &ctx.accounts.state,
-                &base_market,
-                &quote_market,
-                clock.unix_timestamp,
-            )?)
-        }
-
-        SpotFulfillmentType::Match => {
+    let mut fulfillment_params: Box<dyn SpotFulfillmentParams> = {
             let base_market = spot_market_map.get_ref(&market_index)?;
             let quote_market = spot_market_map.get_quote_spot_market()?;
             Box::new(MatchFulfillmentParams::new(
@@ -968,8 +955,7 @@ pub fn handle_place_and_take_spot_order<'c: 'info, 'info>(
                 &base_market,
                 &quote_market,
             )?)
-        }
-    };
+        };
 
     let user_key = ctx.accounts.user.key();
     let mut user = load_mut!(ctx.accounts.user)?;
@@ -1063,20 +1049,7 @@ pub fn handle_place_and_make_spot_order<'c: 'info, 'info>(
 
     let market_index = params.market_index;
 
-    let mut fulfillment_params: Box<dyn SpotFulfillmentParams> = match fulfillment_type {
-        SpotFulfillmentType::SerumV3 => {
-            let base_market = spot_market_map.get_ref(&market_index)?;
-            let quote_market = spot_market_map.get_quote_spot_market()?;
-            Box::new(SerumFulfillmentParams::new(
-                remaining_accounts_iter,
-                &ctx.accounts.state,
-                &base_market,
-                &quote_market,
-                clock.unix_timestamp,
-            )?)
-        }
-
-        SpotFulfillmentType::Match => {
+    let mut fulfillment_params: Box<dyn SpotFulfillmentParams> = {
             let base_market = spot_market_map.get_ref(&market_index)?;
             let quote_market = spot_market_map.get_quote_spot_market()?;
             Box::new(MatchFulfillmentParams::new(
@@ -1084,8 +1057,7 @@ pub fn handle_place_and_make_spot_order<'c: 'info, 'info>(
                 &base_market,
                 &quote_market,
             )?)
-        }
-    };
+        };
 
     let user_key = ctx.accounts.user.key();
     let mut user = load_mut!(ctx.accounts.user)?;
@@ -2335,23 +2307,3 @@ pub struct RevenuePoolDeposit<'info> {
     pub token_program: Interface<'info, TokenInterface>,
 }
 
-#[derive(Accounts)]
-#[instruction(params: PrelaunchOracleParams,)]
-pub struct InitializePrelaunchOracle<'info> {
-    #[account(mut)]
-    pub admin: Signer<'info>,
-    #[account(
-        init,
-        seeds = [b"prelaunch_oracle".as_ref(), params.perp_market_index.to_le_bytes().as_ref()],
-        space = PrelaunchOracle::SIZE,
-        bump,
-        payer = admin
-    )]
-    pub prelaunch_oracle: AccountLoader<'info, PrelaunchOracle>,
-    #[account(
-        has_one = admin
-    )]
-    pub state: Box<Account<'info, DexState>>,
-    pub rent: Sysvar<'info, Rent>,
-    pub system_program: Program<'info, System>,
-}

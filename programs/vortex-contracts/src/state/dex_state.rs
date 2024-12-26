@@ -35,7 +35,6 @@ pub struct DexState {
     pub discount_mint: Pubkey,
     pub signer: Pubkey,
     pub srm_vault: Pubkey,
-    pub perp_fee_structure: FeeStructure,
     pub spot_fee_structure: FeeStructure,
     pub oracle_guard_rails: OracleGuardRails,
     pub number_of_authorities: u64,
@@ -46,7 +45,6 @@ pub struct DexState {
     pub number_of_markets: u16,
     pub number_of_spot_markets: u16,
     pub signer_nonce: u8,
-    pub min_perp_auction_duration: u8,
     pub default_market_order_time_in_force: u8,
     pub default_spot_auction_duration: u8,
     pub exchange_status: u8,
@@ -94,86 +92,12 @@ pub struct FeeStructure {
 
 impl Default for FeeStructure {
     fn default() -> Self {
-        FeeStructure::perps_default()
+        FeeStructure::spot_default()
     }
 }
 
 
 impl FeeStructure {
-    pub fn perps_default() -> Self {
-        let mut fee_tiers = [FeeTier::default(); 10];
-        fee_tiers[0] = FeeTier {
-            fee_numerator: 100,
-            fee_denominator: FEE_DENOMINATOR, // 10 bps
-            maker_rebate_numerator: 20,
-            maker_rebate_denominator: FEE_DENOMINATOR, // 2bps
-            referrer_reward_numerator: 15,
-            referrer_reward_denominator: FEE_PERCENTAGE_DENOMINATOR, // 15% of taker fee
-            referee_fee_numerator: 5,
-            referee_fee_denominator: FEE_PERCENTAGE_DENOMINATOR, // 5%
-        };
-        fee_tiers[1] = FeeTier {
-            fee_numerator: 90,
-            fee_denominator: FEE_DENOMINATOR, // 8 bps
-            maker_rebate_numerator: 20,
-            maker_rebate_denominator: FEE_DENOMINATOR, // 2bps
-            referrer_reward_numerator: 15,
-            referrer_reward_denominator: FEE_PERCENTAGE_DENOMINATOR, // 15% of taker fee
-            referee_fee_numerator: 5,
-            referee_fee_denominator: FEE_PERCENTAGE_DENOMINATOR, // 5%
-        };
-        fee_tiers[2] = FeeTier {
-            fee_numerator: 80,
-            fee_denominator: FEE_DENOMINATOR, // 6 bps
-            maker_rebate_numerator: 20,
-            maker_rebate_denominator: FEE_DENOMINATOR, // 2bps
-            referrer_reward_numerator: 15,
-            referrer_reward_denominator: FEE_PERCENTAGE_DENOMINATOR, // 15% of taker fee
-            referee_fee_numerator: 5,
-            referee_fee_denominator: FEE_PERCENTAGE_DENOMINATOR, // 5%
-        };
-        fee_tiers[3] = FeeTier {
-            fee_numerator: 70,
-            fee_denominator: FEE_DENOMINATOR, // 5 bps
-            maker_rebate_numerator: 20,
-            maker_rebate_denominator: FEE_DENOMINATOR, // 2bps
-            referrer_reward_numerator: 15,
-            referrer_reward_denominator: FEE_PERCENTAGE_DENOMINATOR, // 15% of taker fee
-            referee_fee_numerator: 5,
-            referee_fee_denominator: FEE_PERCENTAGE_DENOMINATOR, // 5%
-        };
-        fee_tiers[4] = FeeTier {
-            fee_numerator: 60,
-            fee_denominator: FEE_DENOMINATOR, // 4 bps
-            maker_rebate_numerator: 20,
-            maker_rebate_denominator: FEE_DENOMINATOR, // 2bps
-            referrer_reward_numerator: 15,
-            referrer_reward_denominator: FEE_PERCENTAGE_DENOMINATOR, // 15% of taker fee
-            referee_fee_numerator: 5,
-            referee_fee_denominator: FEE_PERCENTAGE_DENOMINATOR, // 5%
-        };
-        fee_tiers[5] = FeeTier {
-            fee_numerator: 50,
-            fee_denominator: FEE_DENOMINATOR, // 3.5 bps
-            maker_rebate_numerator: 20,
-            maker_rebate_denominator: FEE_DENOMINATOR, // 2bps
-            referrer_reward_numerator: 15,
-            referrer_reward_denominator: FEE_PERCENTAGE_DENOMINATOR, // 15% of taker fee
-            referee_fee_numerator: 5,
-            referee_fee_denominator: FEE_PERCENTAGE_DENOMINATOR, // 5%
-        };
-        FeeStructure {
-            fee_tiers,
-            filler_reward_structure: OrderFillerRewardStructure {
-                reward_numerator: 10,
-                reward_denominator: FEE_PERCENTAGE_DENOMINATOR,
-                time_based_reward_lower_bound: 10_000, // 1 cent
-            },
-            flat_filler_fee: 10_000,
-            referrer_reward_epoch_upper_bound: MAX_REFERRER_REWARD_EPOCH_UPPER_BOUND,
-        }
-    }
-
     pub fn spot_default() -> Self {
         let mut fee_tiers = [FeeTier::default(); 10];
         fee_tiers[0] = FeeTier {

@@ -31,16 +31,7 @@ pub fn validate_user_is_idle(user: &User, slot: u64, accelerated: bool) -> Vorte
     )?;
 
 
-    // Perp wont be enabled for vortex-v1
 
-    // for perp_position in &user.perp_positions {
-    //     validate!(
-    //         perp_position.is_available(),
-    //         DexError::UserNotInactive,
-    //         "user has perp position for market {}",
-    //         perp_position.market_index
-    //     )?;
-    // }
 
     for spot_position in &user.spot_positions {
         validate!(
@@ -72,7 +63,6 @@ pub fn validate_user_is_idle(user: &User, slot: u64, accelerated: bool) -> Vorte
 
 
 pub fn is_user_bankrupt(user: &User) -> bool {
-    // user is bankrupt iff they have spot liabilities, no spot assets, and no perp exposure
 
     let mut has_liability = false;
 

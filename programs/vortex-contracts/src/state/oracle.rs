@@ -333,7 +333,6 @@ pub struct PrelaunchOracle {
     pub last_update_slot: u64,
     // amm.last_update_slot at time oracle was updated
     pub amm_last_update_slot: u64,
-    pub perp_market_index: u16,
     pub padding: [u8; 70],
 }
 
@@ -351,7 +350,6 @@ impl Default for PrelaunchOracle {
             confidence: 0,
             last_update_slot: 0,
             amm_last_update_slot: 0,
-            perp_market_index: 0,
             padding: [0; 70],
         }
     }
@@ -374,11 +372,4 @@ impl PrelaunchOracle {
 
         Ok(())
     }
-}
-
-#[derive(Debug, Clone, Copy, AnchorSerialize, AnchorDeserialize, PartialEq, Eq)]
-pub struct PrelaunchOracleParams {
-    pub perp_market_index: u16,
-    pub price: Option<i64>,
-    pub max_price: Option<i64>,
 }
