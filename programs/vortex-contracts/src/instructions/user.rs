@@ -1037,7 +1037,6 @@ pub fn handle_place_and_make_spot_order<'c: 'info, 'info>(
         None,
     )?;
 
-   // let (_referrer, _referrer_stats) = get_referrer_and_referrer_stats(remaining_accounts_iter)?;
 
     if !params.immediate_or_cancel
         || params.post_only == PostOnlyParam::None
@@ -1808,16 +1807,6 @@ pub fn handle_end_swap<'c: 'info, 'info>(
 }
 
 
-pub fn handle_update_user_name(
-    ctx: Context<UpdateUser>,
-    _sub_account_id: u16,
-    name: [u8; 32],
-) -> Result<()> {
-    let mut user = load_mut!(ctx.accounts.user)?;
-    user.name = name;
-    Ok(())
-}
-
 pub fn handle_update_user_custom_margin_ratio(
     ctx: Context<UpdateUser>,
     _sub_account_id: u16,
@@ -1878,25 +1867,6 @@ pub fn handle_update_user_advanced_lp(
     validate!(!user.is_being_liquidated(), DexError::LiquidationsOngoing)?;
 
     user.update_advanced_lp_status(advanced_lp)?;
-    Ok(())
-}
-
-pub fn handle_delete_user(ctx: Context<DeleteUser>) -> Result<()> {
-    let user = &load!(ctx.accounts.user)?;
-    let user_stats = &mut load_mut!(ctx.accounts.user_stats)?;
-
-    validate_user_deletion(
-        user,
-        user_stats,
-        &ctx.accounts.state,
-        Clock::get()?.unix_timestamp,
-    )?;
-
-    safe_decrement!(user_stats.number_of_sub_accounts, 1);
-
-    let state = &mut ctx.accounts.state;
-    safe_decrement!(state.number_of_sub_accounts, 1);
-
     Ok(())
 }
 

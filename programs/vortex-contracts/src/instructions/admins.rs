@@ -572,27 +572,7 @@ pub fn handle_update_spot_market_liquidation_fee(
     Ok(())
 }
 
-#[access_control(
-    spot_market_valid(&ctx.accounts.spot_market)
-)]
-pub fn handle_update_withdraw_guard_threshold(
-    ctx: Context<AdminUpdateSpotMarket>,
-    withdraw_guard_threshold: u64,
-) -> Result<()> {
-    let spot_market = &mut load_mut!(ctx.accounts.spot_market)?;
-    msg!(
-        "updating spot market withdraw guard threshold {}",
-        spot_market.market_index
-    );
 
-    msg!(
-        "spot_market.withdraw_guard_threshold: {:?} -> {:?}",
-        spot_market.withdraw_guard_threshold,
-        withdraw_guard_threshold
-    );
-    spot_market.withdraw_guard_threshold = withdraw_guard_threshold;
-    Ok(())
-}
 
 #[access_control(
     spot_market_valid(&ctx.accounts.spot_market)
@@ -642,25 +622,7 @@ pub fn handle_update_spot_market_if_factor(
     Ok(())
 }
 
-#[access_control(
-    spot_market_valid(&ctx.accounts.spot_market)
-)]
-pub fn handle_update_spot_market_revenue_settle_period(
-    ctx: Context<AdminUpdateSpotMarket>,
-    revenue_settle_period: i64,
-) -> Result<()> {
-    let spot_market = &mut load_mut!(ctx.accounts.spot_market)?;
-    msg!("spot market {}", spot_market.market_index);
 
-    validate!(revenue_settle_period > 0, DexError::DefaultError)?;
-    msg!(
-        "spot_market.revenue_settle_period: {:?} -> {:?}",
-        spot_market.insurance_fund.revenue_settle_period,
-        revenue_settle_period
-    );
-    spot_market.insurance_fund.revenue_settle_period = revenue_settle_period;
-    Ok(())
-}
 
 #[access_control(
     spot_market_valid(&ctx.accounts.spot_market)
@@ -921,25 +883,7 @@ pub fn handle_update_spot_market_scale_initial_asset_weight_start(
     Ok(())
 }
 
-#[access_control(
-    spot_market_valid(&ctx.accounts.spot_market)
-)]
-pub fn handle_update_spot_market_orders_enabled(
-    ctx: Context<AdminUpdateSpotMarket>,
-    orders_enabled: bool,
-) -> Result<()> {
-    let spot_market = &mut load_mut!(ctx.accounts.spot_market)?;
-    msg!("spot market {}", spot_market.market_index);
 
-    msg!(
-        "spot_market.orders_enabled: {:?} -> {:?}",
-        spot_market.orders_enabled,
-        orders_enabled
-    );
-
-    spot_market.orders_enabled = orders_enabled;
-    Ok(())
-}
 
 #[access_control(
     spot_market_valid(&ctx.accounts.spot_market)
@@ -1022,78 +966,6 @@ pub fn handle_update_spot_market_expiry(
     Ok(())
 }
 
-pub fn handle_init_user_fuel(
-    ctx: Context<InitUserFuel>,
-    fuel_bonus_deposits: Option<u32>,
-    fuel_bonus_borrows: Option<u32>,
-    fuel_bonus_taker: Option<u32>,
-    fuel_bonus_maker: Option<u32>,
-    fuel_bonus_insurance: Option<u32>,
-) -> Result<()> {
-    let clock: Clock = Clock::get()?;
-    let now_u32 = clock.unix_timestamp as u32;
-
-    let user = &mut load_mut!(ctx.accounts.user)?;
-    let user_stats = &mut load_mut!(ctx.accounts.user_stats)?;
-
-    validate!(
-        user.last_fuel_bonus_update_ts < FUEL_START_TS as u32,
-        DexError::DefaultError,
-        "User must not have begun earning fuel"
-    )?;
-
-    if let Some(fuel_bonus_deposits) = fuel_bonus_deposits {
-        msg!(
-            "user_stats.fuel_deposits {:?} -> {:?}",
-            user_stats.fuel_deposits,
-            user_stats.fuel_deposits.saturating_add(fuel_bonus_deposits)
-        );
-        user_stats.fuel_deposits = user_stats.fuel_deposits.saturating_add(fuel_bonus_deposits);
-    }
-    if let Some(fuel_bonus_borrows) = fuel_bonus_borrows {
-        msg!(
-            "user_stats.fuel_borrows {:?} -> {:?}",
-            user_stats.fuel_borrows,
-            user_stats.fuel_borrows.saturating_add(fuel_bonus_borrows)
-        );
-        user_stats.fuel_borrows = user_stats.fuel_borrows.saturating_add(fuel_bonus_borrows);
-    }
-
-    if let Some(fuel_bonus_taker) = fuel_bonus_taker {
-        msg!(
-            "user_stats.fuel_taker {:?} -> {:?}",
-            user_stats.fuel_taker,
-            user_stats.fuel_taker.saturating_add(fuel_bonus_taker)
-        );
-        user_stats.fuel_taker = user_stats.fuel_taker.saturating_add(fuel_bonus_taker);
-    }
-    if let Some(fuel_bonus_maker) = fuel_bonus_maker {
-        msg!(
-            "user_stats.fuel_maker {:?} -> {:?}",
-            user_stats.fuel_maker,
-            user_stats.fuel_maker.saturating_add(fuel_bonus_maker)
-        );
-        user_stats.fuel_maker = user_stats.fuel_maker.saturating_add(fuel_bonus_maker);
-    }
-
-    if let Some(fuel_bonus_insurance) = fuel_bonus_insurance {
-        msg!(
-            "user_stats.fuel_insurance {:?} -> {:?}",
-            user_stats.fuel_insurance,
-            user_stats
-                .fuel_insurance
-                .saturating_add(fuel_bonus_insurance)
-        );
-        user_stats.fuel_insurance = user_stats
-            .fuel_insurance
-            .saturating_add(fuel_bonus_insurance);
-    }
-
-    user.last_fuel_bonus_update_ts = now_u32;
-    user_stats.last_fuel_if_bonus_update_ts = now_u32;
-
-    Ok(())
-}
 
 
 #[access_control(
@@ -1130,30 +1002,7 @@ pub fn handle_update_spot_market_step_size_and_tick_size(
 }
 
 
-#[access_control(
-    spot_market_valid(&ctx.accounts.spot_market)
-)]
-pub fn handle_update_spot_market_min_order_size(
-    ctx: Context<AdminUpdateSpotMarket>,
-    order_size: u64,
-) -> Result<()> {
-    let spot_market = &mut load_mut!(ctx.accounts.spot_market)?;
-    msg!("spot market {}", spot_market.market_index);
 
-    validate!(
-        spot_market.market_index == 0 || order_size > 0,
-        DexError::DefaultError
-    )?;
-
-    msg!(
-        "spot_market.min_order_size: {:?} -> {:?}",
-        spot_market.min_order_size,
-        order_size
-    );
-
-    spot_market.min_order_size = order_size;
-    Ok(())
-}
 
 #[access_control(
     spot_market_valid(&ctx.accounts.spot_market)
@@ -1259,19 +1108,7 @@ pub fn handle_update_exchange_status(
 }
 
 
-pub fn handle_update_spot_auction_duration(
-    ctx: Context<AdminUpdateState>,
-    default_spot_auction_duration: u8,
-) -> Result<()> {
-    msg!(
-        "default_spot_auction_duration: {:?} -> {:?}",
-        ctx.accounts.state.default_spot_auction_duration,
-        default_spot_auction_duration
-    );
 
-    ctx.accounts.state.default_spot_auction_duration = default_spot_auction_duration;
-    Ok(())
-}
 
 // pub fn handle_initialize_pyth_pull_oracle(
 //     ctx: Context<InitPythPullPriceFeed>,

@@ -171,15 +171,6 @@ pub mod vortex_contracts {
         )
     }
 
-
-    pub fn update_user_name(
-        ctx: Context<UpdateUser>,
-        _sub_account_id: u16,
-        name: [u8; 32],
-    ) -> Result<()> {
-        handle_update_user_name(ctx, _sub_account_id, name)
-    }
-
     pub fn update_user_custom_margin_ratio(
         ctx: Context<UpdateUser>,
         _sub_account_id: u16,
@@ -210,12 +201,6 @@ pub mod vortex_contracts {
         advanced_lp: bool,
     ) -> Result<()> {
         handle_update_user_advanced_lp(ctx, _sub_account_id, advanced_lp)
-    }
-
-    pub fn delete_user<'c: 'info, 'info>(
-        ctx: Context<'_, '_, 'c, 'info, DeleteUser>,
-    ) -> Result<()> {
-        handle_delete_user(ctx)
     }
 
     pub fn reclaim_rent(ctx: Context<ReclaimRent>) -> Result<()> {
@@ -283,8 +268,6 @@ pub mod vortex_contracts {
         handle_delete_initialized_spot_market(ctx, market_index)
     }
 
-
-
     pub fn deposit_into_spot_market_vault<'c: 'info, 'info>(
         ctx: Context<'_, '_, 'c, 'info, DepositIntoSpotMarketVault<'info>>,
         amount: u64,
@@ -299,20 +282,12 @@ pub mod vortex_contracts {
         handle_deposit_into_spot_market_revenue_pool(ctx, amount)
     }
 
-
     pub fn update_spot_market_liquidation_fee(
         ctx: Context<AdminUpdateSpotMarket>,
         liquidator_fee: u32,
         if_liquidation_fee: u32,
     ) -> Result<()> {
         handle_update_spot_market_liquidation_fee(ctx, liquidator_fee, if_liquidation_fee)
-    }
-
-    pub fn update_withdraw_guard_threshold(
-        ctx: Context<AdminUpdateSpotMarket>,
-        withdraw_guard_threshold: u64,
-    ) -> Result<()> {
-        handle_update_withdraw_guard_threshold(ctx, withdraw_guard_threshold)
     }
 
     pub fn update_spot_market_if_factor(
@@ -322,13 +297,6 @@ pub mod vortex_contracts {
         total_if_factor: u32,
     ) -> Result<()> {
         handle_update_spot_market_if_factor(ctx, spot_market_index, user_if_factor, total_if_factor)
-    }
-
-    pub fn update_spot_market_revenue_settle_period(
-        ctx: Context<AdminUpdateSpotMarket>,
-        revenue_settle_period: i64,
-    ) -> Result<()> {
-        handle_update_spot_market_revenue_settle_period(ctx, revenue_settle_period)
     }
 
     pub fn update_spot_market_status(
@@ -427,13 +395,6 @@ pub mod vortex_contracts {
     }
 
 
-    pub fn update_spot_market_orders_enabled(
-        ctx: Context<AdminUpdateSpotMarket>,
-        orders_enabled: bool,
-    ) -> Result<()> {
-        handle_update_spot_market_orders_enabled(ctx, orders_enabled)
-    }
-
     pub fn update_spot_market_if_paused_operations(
         ctx: Context<AdminUpdateSpotMarket>,
         paused_operations: u8,
@@ -463,16 +424,12 @@ pub mod vortex_contracts {
         handle_update_liquidation_duration(ctx, liquidation_duration)
     }
 
-
-
     pub fn update_state_max_initialize_user_fee(
         ctx: Context<AdminUpdateState>,
         max_initialize_user_fee: u16,
     ) -> Result<()> {
         handle_update_state_max_initialize_user_fee(ctx, max_initialize_user_fee)
     }
-
-
 
     pub fn update_whitelist_mint(
         ctx: Context<AdminUpdateState>,
@@ -488,8 +445,6 @@ pub mod vortex_contracts {
     ) -> Result<()> {
         handle_update_exchange_status(ctx, exchange_status)
     }
-
-
 
     // pub fn initialize_pyth_pull_oracle(
     //     ctx: Context<InitPythPullPriceFeed>,
