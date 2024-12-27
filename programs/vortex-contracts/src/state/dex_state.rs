@@ -1,30 +1,10 @@
 use anchor_lang::prelude::*;
-use enumflags2::{BitFlags , bitflags};
+use enumflags2::BitFlags;
 
 use crate::{errors::VortexDexResult, safe_methods::SafeMath , safe_methods::SafeUnwrap};
 
 use crate::utils::constants::{FEE_DENOMINATOR, FEE_PERCENTAGE_DENOMINATOR, LAMPORTS_PER_SOL_U64, MAX_REFERRER_REWARD_EPOCH_UPPER_BOUND, PERCENTAGE_PRECISION_U64};
 
-#[bitflags]
-#[repr(u8)]
-#[derive(Clone, Copy, PartialEq, Debug, Eq)]
-pub enum ExchangeStatus {
-    // Active = 0b00000000
-    DepositPaused = 0b00000001,
-    WithdrawPaused = 0b00000010,
-    AmmPaused = 0b00000100,
-    FillPaused = 0b00001000,
-    LiqPaused = 0b00010000,
-    FundingPaused = 0b00100000,
-    SettlePnlPaused = 0b01000000,
-    // Paused = 0b11111111
-}
-
-impl ExchangeStatus {
-    pub fn active() -> u8 {
-        BitFlags::<ExchangeStatus>::empty().bits() as u8
-    }
-}
 
 #[account]
 #[derive(Default)]
@@ -54,11 +34,32 @@ pub struct DexState {
     pub padding: [u8; 10],
 }
 
+#[derive(BitFlags, Clone, Copy, PartialEq, Debug, Eq)]
+pub enum ExchangeStatus {
+    // Active = 0b00000000
+    DepositPaused = 0b00000001,
+    WithdrawPaused = 0b00000010,
+    AmmPaused = 0b00000100,
+    FillPaused = 0b00001000,
+    LiqPaused = 0b00010000,
+    FundingPaused = 0b00100000,
+    SettlePnlPaused = 0b01000000,
+    AmmImmediateFillPaused = 0b10000000,
+    // Paused = 0b11111111
+}
+
+
+impl ExchangeStatus {
+    pub fn active() -> u8 {
+        BitFlags::<ExchangeStatus>::empty().bits() as u8
+    }
+}
+
 impl DexState {
     pub const SIZE: usize = 992;
 
     pub fn get_exchange_status(&self) -> VortexDexResult<BitFlags<ExchangeStatus>> {
-        BitFlags::<ExchangeStatus>::from_bits(u8::from(self.exchange_status)).safe_unwrap()
+        BitFlags::<ExchangeStatus>::from_bits(usize::from(self.exchange_status)).safe_unwrap()
     }
 
     pub fn amm_paused(&self) -> VortexDexResult<bool> {
