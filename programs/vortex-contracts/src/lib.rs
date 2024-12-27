@@ -325,12 +325,12 @@ pub mod vortex_contracts {
         handle_update_exchange_status(ctx, exchange_status)
     }
 
-    pub fn initialize_pyth_pull_oracle(
-        ctx: Context<InitPythPullPriceFeed>,
-        feed_id: [u8; 32],
-    ) -> Result<()> {
-        handle_initialize_pyth_pull_oracle(ctx, feed_id)
-    }
+    // pub fn initialize_pyth_pull_oracle(
+    //     ctx: Context<InitPythPullPriceFeed>,
+    //     feed_id: [u8; 32],
+    // ) -> Result<()> {
+    //     handle_initialize_pyth_pull_oracle(ctx, feed_id)
+    // }
 
     // trader bots
     // bots will be responsible for taking orders and completing them
