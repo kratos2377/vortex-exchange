@@ -123,14 +123,6 @@ pub fn handle_trigger_order<'c: 'info, 'info>(
         None,
     )?;
 
-    let market_type = match load!(ctx.accounts.user)?.get_order(order_id) {
-        Some(order) => order.market_type,
-        None => {
-            msg!("order_id not found {}", order_id);
-            return Ok(());
-        }
-    };
-
 controllers::orders::trigger_spot_order(
             order_id,
             &ctx.accounts.state,
@@ -145,33 +137,6 @@ controllers::orders::trigger_spot_order(
     Ok(())
 }
 
-#[access_control(
-    exchange_not_paused(&ctx.accounts.state)
-)]
-pub fn handle_force_cancel_orders<'c: 'info, 'info>(
-    ctx: Context<'_, '_, 'c, 'info, ForceCancelOrder>,
-) -> Result<()> {
-    let AccountMaps {
-        spot_market_map,
-        mut oracle_map,
-    } = load_maps(
-        &mut ctx.remaining_accounts.iter().peekable(),
-        &MarketSet::new(),
-        Clock::get()?.slot,
-        None,
-    )?;
-
-    controllers::orders::force_cancel_orders(
-        &ctx.accounts.state,
-        &ctx.accounts.user,
-        &spot_market_map,
-        &mut oracle_map,
-        &ctx.accounts.filler,
-        &Clock::get()?,
-    )?;
-
-    Ok(())
-}
 
 #[access_control(
     exchange_not_paused(&ctx.accounts.state)

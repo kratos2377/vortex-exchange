@@ -7,7 +7,7 @@ use crate::{casting::Cast, errors::{DexError, VortexDexResult}, get_struct_value
     OrderActionExplanation, OrderActionRecord, OrderRecord}, 
     fulfillment::SpotFulfillmentMethod, margin_calculation::{MarginCalculation, MarginContext}, operations::SpotOperation, oracle::{OraclePriceData, StrictOraclePrice}, oracle_map::OracleMap, order_params::{ModifyOrderParams, ModifyOrderPolicy, OrderParams, PlaceOrderOptions, PostOnlyParam}, position::PositionDirection, spot_fulfillment_params::{ExternalSpotFill, SpotFulfillmentParams}, spot_market::{MarketStatus, SpotBalanceType, SpotMarket}, spot_market_map::SpotMarketMap, user::{AssetType, MarketType, Order, OrderStatus, OrderTriggerCondition, OrderType, User}, user_map::{UserMap, UserStatsMap}, user_stats::UserStats}, utils::{auction_utils::{calculate_auction_params_for_trigger_order, calculate_auction_prices}, constants::QUOTE_SPOT_MARKET_INDEX, fees_utils::{self, FillFees}, fuel_utils::ExternalFillFees, liquidation_utils::validate_user_not_being_liquidated, margin_utils::{calculate_margin_requirement_and_total_collateral_and_liability_info, meets_initial_margin_requirement, meets_place_order_margin_requirement, validate_spot_margin_trading, MarginRequirementType}, matching_utils::{are_orders_same_market_but_different_sides, calculate_fill_for_matched_orders, calculate_filler_multiplier_for_matched_orders, do_orders_cross, is_maker_for_taker}, oracle_utils::{is_oracle_valid_for_action, VortexDexAction}, order_utils::{calculate_fill_price, calculate_max_spot_order_size, determine_spot_fulfillment_methods, find_maker_orders, get_max_fill_amounts, is_multiple_of_step_size, is_new_order_risk_increasing, is_oracle_too_divergent_with_twap_5min, is_order_position_reducing, limit_price_breaches_maker_oracle_price_bands, order_satisfies_trigger_condition, should_cancel_reduce_only_order, should_expire_order, should_expire_order_before_fill, standardize_base_asset_amount, standardize_price, standardize_price_i64, validate_fill_price, validate_fill_price_within_price_bands, validate_order_for_force_reduce_only, validate_spot_order}, spot_market_utils::{get_signed_token_amount, get_token_amount, select_margin_type_for_swap}}, validate};
 
-use super::{position, spot_balance::{update_spot_balances, update_spot_market_cumulative_interest}, spot_position::{decrease_spot_open_bids_and_asks, increase_spot_open_bids_and_asks, update_spot_balances_and_cumulative_deposits}};
+use super::{spot_balance::{update_spot_balances, update_spot_market_cumulative_interest}, spot_position::{decrease_spot_open_bids_and_asks, increase_spot_open_bids_and_asks, update_spot_balances_and_cumulative_deposits}};
 
 
 pub fn cancel_order(
@@ -2287,105 +2287,6 @@ fn update_maker_fills_map(
     } else {
         map.insert(*maker_key, signed_fill);
     }
-
-    Ok(())
-}
-
-
-pub fn force_cancel_orders(
-    state: &DexState,
-    user_account_loader: &AccountLoader<User>,
-    spot_market_map: &SpotMarketMap,
-    oracle_map: &mut OracleMap,
-    filler: &AccountLoader<User>,
-    clock: &Clock,
-) -> VortexDexResult {
-    let now = clock.unix_timestamp;
-    let slot = clock.slot;
-
-    let filler_key = filler.key();
-    let user_key = user_account_loader.key();
-    let user = &mut load_mut!(user_account_loader)?;
-    let filler = &mut load_mut!(filler)?;
-
-    validate!(
-        !user.is_being_liquidated(),
-        DexError::UserIsBeingLiquidated
-    )?;
-
-    validate!(!user.is_bankrupt(), DexError::UserBankrupt)?;
-
-    let margin_calc = calculate_margin_requirement_and_total_collateral_and_liability_info(
-        user,
-        spot_market_map,
-        oracle_map,
-        MarginContext::standard(MarginRequirementType::Initial),
-    )?;
-
-    let meets_initial_margin_requirement = margin_calc.meets_margin_requirement();
-
-    validate!(
-        !meets_initial_margin_requirement,
-        DexError::SufficientCollateral
-    )?;
-
-    let mut total_fee = 0_u64;
-
-    for order_index in 0..user.orders.len() {
-        if user.orders[order_index].status != OrderStatus::Open {
-            continue;
-        }
-
-        let market_index = user.orders[order_index].market_index;
-        let market_type = user.orders[order_index].market_type;
-
-        let fee =  {
-      
-                let spot_market = spot_market_map.get_ref(&market_index)?;
-                let token_amount = user
-                    .get_spot_position(market_index)?
-                    .get_signed_token_amount(&spot_market)?
-                    .cast::<i64>()?;
-                let is_position_reducing = is_order_position_reducing(
-                    &user.orders[order_index].direction,
-                    user.orders[order_index].get_base_asset_amount_unfilled(Some(token_amount))?,
-                    token_amount,
-                )?;
-                if is_position_reducing {
-                    continue;
-                }
-
-                state.spot_fee_structure.flat_filler_fee
-            
-
-        };
-
-        total_fee = total_fee.safe_add(fee)?;
-
-        cancel_order(
-            order_index,
-            user,
-            &user_key,
-            spot_market_map,
-            oracle_map,
-            now,
-            slot,
-            OrderActionExplanation::InsufficientFreeCollateral,
-            Some(&filler_key),
-            fee,
-            false,
-        )?;
-    }
-
-    pay_keeper_flat_reward_for_spot(
-        user,
-        Some(filler),
-        spot_market_map.get_quote_spot_market_mut()?.deref_mut(),
-        total_fee,
-        slot,
-    )?;
-
-    user.update_last_active_slot(slot);
 
     Ok(())
 }

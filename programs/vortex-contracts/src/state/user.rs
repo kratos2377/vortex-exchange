@@ -300,15 +300,6 @@ impl User {
             && self.total_withdraws / user_stats.fees.total_fee_paid.max(1) > 10_000
     }
 
-    pub fn update_reduce_only_status(&mut self, reduce_only: bool) -> VortexDexResult {
-        if reduce_only {
-            self.add_user_status(UserStatus::ReduceOnly);
-        } else {
-            self.remove_user_status(UserStatus::ReduceOnly);
-        }
-
-        Ok(())
-    }
 
     pub fn update_advanced_lp_status(&mut self, advanced_lp: bool) -> VortexDexResult {
         if advanced_lp {

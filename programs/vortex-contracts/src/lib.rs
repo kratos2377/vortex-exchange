@@ -67,42 +67,7 @@ pub mod vortex_contracts {
         reduce_only: bool,
     ) -> anchor_lang::Result<()> {
         handle_withdraw(ctx, market_index, amount, reduce_only)
-    }
-
-   
-
-    pub fn cancel_order<'c: 'info, 'info>(
-        ctx: Context<'_, '_, 'c, 'info, CancelOrder>,
-        order_id: Option<u32>,
-    ) -> Result<()> {
-        handle_cancel_order(ctx, order_id)
-    }
-
-    pub fn cancel_order_by_user_id<'c: 'info, 'info>(
-        ctx: Context<'_, '_, 'c, 'info, CancelOrder>,
-        user_order_id: u8,
-    ) -> Result<()> {
-        handle_cancel_order_by_user_id(ctx, user_order_id)
-    }
-
-    pub fn cancel_orders<'c: 'info, 'info>(
-        ctx: Context<'_, '_, 'c, 'info, CancelOrder<'info>>,
-        market_type: Option<MarketType>,
-        market_index: Option<u16>,
-        direction: Option<PositionDirection>,
-    ) -> Result<()> {
-        handle_cancel_orders(ctx, market_type, market_index, direction)
-    }
-
-    pub fn cancel_orders_by_ids<'c: 'info, 'info>(
-        ctx: Context<'_, '_, 'c, 'info, CancelOrder>,
-        order_ids: Vec<u32>,
-    ) -> Result<()> {
-        handle_cancel_orders_by_ids(ctx, order_ids)
-    }
-
-
-    
+    }   
 
     pub fn place_spot_order<'c: 'info, 'info>(
         ctx: Context<'_, '_, 'c, 'info, PlaceOrder>,
@@ -137,62 +102,6 @@ pub mod vortex_contracts {
             taker_order_id,
             fulfillment_type.unwrap_or(SpotFulfillmentType::Match),
         )
-    }
-
-    pub fn place_orders<'c: 'info, 'info>(
-        ctx: Context<'_, '_, 'c, 'info, PlaceOrder>,
-        params: Vec<OrderParams>,
-    ) -> Result<()> {
-        handle_place_orders(ctx, params)
-    }
-
-    pub fn begin_swap<'c: 'info, 'info>(
-        ctx: Context<'_, '_, 'c, 'info, Swap<'info>>,
-        in_market_index: u16,
-        out_market_index: u16,
-        amount_in: u64,
-    ) -> Result<()> {
-        handle_begin_swap(ctx, in_market_index, out_market_index, amount_in)
-    }
-
-    pub fn end_swap<'c: 'info, 'info>(
-        ctx: Context<'_, '_, 'c, 'info, Swap<'info>>,
-        in_market_index: u16,
-        out_market_index: u16,
-        limit_price: Option<u64>,
-        reduce_only: Option<SwapReduceOnly>,
-    ) -> Result<()> {
-        handle_end_swap(
-            ctx,
-            in_market_index,
-            out_market_index,
-            limit_price,
-            reduce_only,
-        )
-    }
-
-    pub fn update_user_custom_margin_ratio(
-        ctx: Context<UpdateUser>,
-        _sub_account_id: u16,
-        margin_ratio: u32,
-    ) -> Result<()> {
-        handle_update_user_custom_margin_ratio(ctx, _sub_account_id, margin_ratio)
-    }
-
-    pub fn update_user_margin_trading_enabled<'c: 'info, 'info>(
-        ctx: Context<'_, '_, 'c, 'info, UpdateUser<'info>>,
-        _sub_account_id: u16,
-        margin_trading_enabled: bool,
-    ) -> Result<()> {
-        handle_update_user_margin_trading_enabled(ctx, _sub_account_id, margin_trading_enabled)
-    }
-
-    pub fn update_user_reduce_only(
-        ctx: Context<UpdateUser>,
-        _sub_account_id: u16,
-        reduce_only: bool,
-    ) -> Result<()> {
-        handle_update_user_reduce_only(ctx, _sub_account_id, reduce_only)
     }
 
     pub fn update_user_advanced_lp(
@@ -290,34 +199,13 @@ pub mod vortex_contracts {
         handle_update_spot_market_liquidation_fee(ctx, liquidator_fee, if_liquidation_fee)
     }
 
-    pub fn update_spot_market_if_factor(
+    pub fn update_spot_market_insurance_fund_factor(
         ctx: Context<AdminUpdateSpotMarket>,
         spot_market_index: u16,
         user_if_factor: u32,
         total_if_factor: u32,
     ) -> Result<()> {
         handle_update_spot_market_if_factor(ctx, spot_market_index, user_if_factor, total_if_factor)
-    }
-
-    pub fn update_spot_market_status(
-        ctx: Context<AdminUpdateSpotMarket>,
-        status: MarketStatus,
-    ) -> Result<()> {
-        handle_update_spot_market_status(ctx, status)
-    }
-
-    pub fn update_spot_market_paused_operations(
-        ctx: Context<AdminUpdateSpotMarket>,
-        paused_operations: u8,
-    ) -> Result<()> {
-        handle_update_spot_market_paused_operations(ctx, paused_operations)
-    }
-
-    pub fn update_spot_market_asset_tier(
-        ctx: Context<AdminUpdateSpotMarket>,
-        asset_tier: AssetTier,
-    ) -> Result<()> {
-        handle_update_spot_market_asset_tier(ctx, asset_tier)
     }
 
     pub fn update_spot_market_margin_weights(
@@ -386,15 +274,6 @@ pub mod vortex_contracts {
         handle_update_spot_market_oracle(ctx, oracle, oracle_source)
     }
 
-    pub fn update_spot_market_step_size_and_tick_size(
-        ctx: Context<AdminUpdateSpotMarket>,
-        step_size: u64,
-        tick_size: u64,
-    ) -> Result<()> {
-        handle_update_spot_market_step_size_and_tick_size(ctx, step_size, tick_size)
-    }
-
-
     pub fn update_spot_market_if_paused_operations(
         ctx: Context<AdminUpdateSpotMarket>,
         paused_operations: u8,
@@ -446,12 +325,12 @@ pub mod vortex_contracts {
         handle_update_exchange_status(ctx, exchange_status)
     }
 
-    // pub fn initialize_pyth_pull_oracle(
-    //     ctx: Context<InitPythPullPriceFeed>,
-    //     feed_id: [u8; 32],
-    // ) -> Result<()> {
-    //     handle_initialize_pyth_pull_oracle(ctx, feed_id)
-    // }
+    pub fn initialize_pyth_pull_oracle(
+        ctx: Context<InitPythPullPriceFeed>,
+        feed_id: [u8; 32],
+    ) -> Result<()> {
+        handle_initialize_pyth_pull_oracle(ctx, feed_id)
+    }
 
     // trader bots
     // bots will be responsible for taking orders and completing them
@@ -473,11 +352,6 @@ pub mod vortex_contracts {
         handle_trigger_order(ctx, order_id)
     }
 
-    pub fn force_cancel_orders<'c: 'info, 'info>(
-        ctx: Context<'_, '_, 'c, 'info, ForceCancelOrder<'info>>,
-    ) -> Result<()> {
-        handle_force_cancel_orders(ctx)
-    }
 
     pub fn update_user_idle<'c: 'info, 'info>(
         ctx: Context<'_, '_, 'c, 'info, UpdateUserIdle<'info>>,

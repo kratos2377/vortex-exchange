@@ -1,4 +1,4 @@
-use crate::{casting::Cast, errors::{DexError, VortexDexResult}, margin_calculation::MarginCalculation, safe_methods::SafeMath, spot_market::{SpotBalanceType, SpotMarket}, state::{margin_calculation::MarginContext, oracle_map::OracleMap, spot_market_map::SpotMarketMap, user::User}, utils::swap_utils::calculate_swap_price, validate};
+use crate::{casting::Cast, errors::{DexError, VortexDexResult}, margin_calculation::MarginCalculation, safe_methods::SafeMath, spot_market::{SpotBalanceType, SpotMarket}, state::{margin_calculation::MarginContext, oracle_map::OracleMap, spot_market_map::SpotMarketMap, user::User}, validate};
 use crate::msg;
 use super::{constants::{LIQUIDATION_FEE_PRECISION, LIQUIDATION_FEE_PRECISION_U128, LIQUIDATION_PCT_PRECISION, PRICE_PRECISION, QUOTE_PRECISION, SPOT_WEIGHT_PRECISION_U128}, margin_utils::calculate_margin_requirement_and_total_collateral_and_liability_info, spot_market_utils::get_token_amount};
 
@@ -74,12 +74,11 @@ pub fn validate_transfer_satisfies_limit_price(
         None => return Ok(()),
     };
 
-    let swap_price = calculate_swap_price(
-        asset_transfer,
-        liability_transfer,
-        asset_decimals,
-        liability_decimals,
-    )?;
+    let swap_price =   asset_transfer
+    .safe_mul(PRICE_PRECISION)?
+    .safe_div(10_u128.pow(asset_decimals))?
+    .safe_mul(10_u128.pow(liability_decimals))?
+    .safe_div(liability_transfer).unwrap();
 
     validate!(
         swap_price >= limit_price.cast()?,

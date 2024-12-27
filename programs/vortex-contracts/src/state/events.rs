@@ -151,24 +151,6 @@ pub enum OrderActionExplanation {
 }
 
 #[event]
-#[derive(Default)]
-pub struct SwapRecord {
-    pub ts: i64,
-    pub user: Pubkey,
-    /// precision: out market mint precision
-    pub amount_out: u64,
-    /// precision: in market mint precision
-    pub amount_in: u64,
-    pub out_market_index: u16,
-    pub in_market_index: u16,
-    /// precision: PRICE_PRECISION
-    pub out_oracle_price: i64,
-    /// precision: PRICE_PRECISION
-    pub in_oracle_price: i64,
-    pub fee: u64,
-}
-
-#[event]
 pub struct SpotMarketVaultDepositRecord {
     pub ts: i64,
     pub market_index: u16,
