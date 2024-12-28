@@ -2,14 +2,6 @@
 #![allow(clippy::bool_assert_comparison)]
 #![allow(clippy::comparison_chain)]
 use anchor_lang::prelude::*;
-use dex_state::{FeeStructure, OracleGuardRails};
-use game_stake::BetType;
-use oracle::OracleSource;
-use order_params::{ModifyOrderParams, OrderParams};
-use position::PositionDirection;
-use spot_market::{AssetTier, MarketStatus, SpotFulfillmentConfigStatus};
-use user::MarketType;
-
 pub mod errors;
 pub mod state;
 pub mod utils;
@@ -17,11 +9,10 @@ pub mod instructions;
 pub mod macros;
 pub mod ids;
 pub mod safe_methods;
-pub mod casting;
+pub mod math;
 pub mod controllers;
-use crate::instructions::{user::*, admins::*, executors::*, game_stake::*};
 use crate::state::*;
-
+use crate::instructions::*;
 
 #[cfg(feature = "devnet")]
 declare_id!("HkApQpEsdzdfHsedkuZvNEbmcQXfabobbb9Yf8wdz7AZ");
@@ -31,369 +22,191 @@ pub mod vortex_contracts {
 
     use super::*;
 
-
-    
-    // User instructions
-
-    pub fn initialize_user<'c: 'info, 'info>(
-        ctx: Context<'_, '_, 'c, 'info, InitializeUserAccount<'info>>,
-        name: [u8; 32],
+     // The configuation of AMM protocol, include trade fee and protocol fee
+    /// # Arguments
+    ///
+    /// * `ctx`- The accounts needed by instruction.
+    /// * `index` - The index of amm config, there may be multiple config.
+    /// * `trade_fee_rate` - Trade fee rate, can be changed.
+    /// * `protocol_fee_rate` - The rate of protocol fee within tarde fee.
+    /// * `fund_fee_rate` - The rate of fund fee within tarde fee.
+    ///
+    pub fn create_amm_config(
+        ctx: Context<CreateAmmConfig>,
+        index: u16,
+        trade_fee_rate: u64,
+        protocol_fee_rate: u64,
+        fund_fee_rate: u64,
+        create_pool_fee: u64,
     ) -> Result<()> {
-        initialize_new_user_account(ctx, name)
-    }
-
-
-    pub fn initialize_user_stats<'c: 'info, 'info>(
-        ctx: Context<'_, '_, 'c, 'info, InitializeUserStats>,
-    ) -> Result<()> {
-        handle_initialize_user_stats(ctx)
-    }
-
-
-    pub fn deposit<'c: 'info, 'info>(
-        ctx: Context<'_, '_, 'c, 'info, Deposit<'info>>,
-        market_index: u16,
-        amount: u64,
-        reduce_only: bool,
-    ) -> Result<()> {
-        handle_deposit(ctx, market_index, amount, reduce_only)
-    }
-
-
-    pub fn withdraw<'c: 'info, 'info>(
-        ctx: Context<'_, '_, 'c, 'info, Withdraw<'info>>,
-        market_index: u16,
-        amount: u64,
-        reduce_only: bool,
-    ) -> anchor_lang::Result<()> {
-        handle_withdraw(ctx, market_index, amount, reduce_only)
-    }   
-
-    pub fn place_spot_order<'c: 'info, 'info>(
-        ctx: Context<'_, '_, 'c, 'info, PlaceOrder>,
-        params: OrderParams,
-    ) -> Result<()> {
-        handle_place_spot_order(ctx, params)
-    }
-
-    pub fn place_and_take_spot_order<'c: 'info, 'info>(
-        ctx: Context<'_, '_, 'c, 'info, PlaceAndTake<'info>>,
-        params: OrderParams,
-        fulfillment_type: Option<SpotFulfillmentType>,
-        maker_order_id: Option<u32>,
-    ) -> Result<()> {
-        handle_place_and_take_spot_order(
+        assert!(trade_fee_rate < FEE_RATE_DENOMINATOR_VALUE);
+        assert!(protocol_fee_rate <= FEE_RATE_DENOMINATOR_VALUE);
+        assert!(fund_fee_rate <= FEE_RATE_DENOMINATOR_VALUE);
+        assert!(fund_fee_rate + protocol_fee_rate <= FEE_RATE_DENOMINATOR_VALUE);
+        handle_create_amm_config(
             ctx,
-            params,
-            fulfillment_type.unwrap_or(SpotFulfillmentType::Match),
-            maker_order_id,
+            index,
+            trade_fee_rate,
+            protocol_fee_rate,
+            fund_fee_rate,
+            create_pool_fee,
         )
     }
 
-    pub fn place_and_make_spot_order<'c: 'info, 'info>(
-        ctx: Context<'_, '_, 'c, 'info, PlaceAndMake<'info>>,
-        params: OrderParams,
-        taker_order_id: u32,
-        fulfillment_type: Option<SpotFulfillmentType>,
+    /// Updates the owner of the amm config
+    /// Must be called by the current owner or admin
+    ///
+    /// # Arguments
+    ///
+    /// * `ctx`- The context of accounts
+    /// * `trade_fee_rate`- The new trade fee rate of amm config, be set when `param` is 0
+    /// * `protocol_fee_rate`- The new protocol fee rate of amm config, be set when `param` is 1
+    /// * `fund_fee_rate`- The new fund fee rate of amm config, be set when `param` is 2
+    /// * `new_owner`- The config's new owner, be set when `param` is 3
+    /// * `new_fund_owner`- The config's new fund owner, be set when `param` is 4
+    /// * `param`- The vaule can be 0 | 1 | 2 | 3 | 4, otherwise will report a error
+    ///
+    pub fn update_amm_config(ctx: Context<UpdateAmmConfig>, param: u8, value: u64) -> Result<()> {
+        handle_update_amm_config(ctx, param, value)
+    }
+
+    /// Update pool status for given vaule
+    ///
+    /// # Arguments
+    ///
+    /// * `ctx`- The context of accounts
+    /// * `status` - The vaule of status
+    ///
+    pub fn update_pool_status(ctx: Context<UpdatePoolStatus>, status: u8) -> Result<()> {
+        update_pool_status(ctx, status)
+    }
+
+    /// Collect the protocol fee accrued to the pool
+    ///
+    /// # Arguments
+    ///
+    /// * `ctx` - The context of accounts
+    /// * `amount_0_requested` - The maximum amount of token_0 to send, can be 0 to collect fees in only token_1
+    /// * `amount_1_requested` - The maximum amount of token_1 to send, can be 0 to collect fees in only token_0
+    ///
+    pub fn collect_protocol_fee(
+        ctx: Context<CollectProtocolFee>,
+        amount_0_requested: u64,
+        amount_1_requested: u64,
     ) -> Result<()> {
-        handle_place_and_make_spot_order(
+        collect_protocol_fee(ctx, amount_0_requested, amount_1_requested)
+    }
+
+    /// Collect the fund fee accrued to the pool
+    ///
+    /// # Arguments
+    ///
+    /// * `ctx` - The context of accounts
+    /// * `amount_0_requested` - The maximum amount of token_0 to send, can be 0 to collect fees in only token_1
+    /// * `amount_1_requested` - The maximum amount of token_1 to send, can be 0 to collect fees in only token_0
+    ///
+    pub fn collect_fund_fee(
+        ctx: Context<CollectFundFee>,
+        amount_0_requested: u64,
+        amount_1_requested: u64,
+    ) -> Result<()> {
+        collect_fund_fee(ctx, amount_0_requested, amount_1_requested)
+    }
+
+    /// Creates a pool for the given token pair and the initial price
+    ///
+    /// # Arguments
+    ///
+    /// * `ctx`- The context of accounts
+    /// * `init_amount_0` - the initial amount_0 to deposit
+    /// * `init_amount_1` - the initial amount_1 to deposit
+    /// * `open_time` - the timestamp allowed for swap
+    ///
+    pub fn initialize(
+        ctx: Context<Initialize>,
+        init_amount_0: u64,
+        init_amount_1: u64,
+        open_time: u64,
+    ) -> Result<()> {
+        initialize(ctx, init_amount_0, init_amount_1, open_time)
+    }
+
+    /// Creates a pool for the given token pair and the initial price
+    ///
+    /// # Arguments
+    ///
+    /// * `ctx`- The context of accounts
+    /// * `lp_token_amount` - Pool token amount to transfer. token_a and token_b amount are set by the current exchange rate and size of the pool
+    /// * `maximum_token_0_amount` -  Maximum token 0 amount to deposit, prevents excessive slippage
+    /// * `maximum_token_1_amount` - Maximum token 1 amount to deposit, prevents excessive slippage
+    ///
+    pub fn deposit(
+        ctx: Context<Deposit>,
+        lp_token_amount: u64,
+        maximum_token_0_amount: u64,
+        maximum_token_1_amount: u64,
+    ) -> Result<()> {
+        deposit(
             ctx,
-            params,
-            taker_order_id,
-            fulfillment_type.unwrap_or(SpotFulfillmentType::Match),
+            lp_token_amount,
+            maximum_token_0_amount,
+            maximum_token_1_amount,
         )
     }
 
-    pub fn update_user_advanced_lp(
-        ctx: Context<UpdateUser>,
-        _sub_account_id: u16,
-        advanced_lp: bool,
+    /// Withdraw lp for token0 ande token1
+    ///
+    /// # Arguments
+    ///
+    /// * `ctx`- The context of accounts
+    /// * `lp_token_amount` - Amount of pool tokens to burn. User receives an output of token a and b based on the percentage of the pool tokens that are returned.
+    /// * `minimum_token_0_amount` -  Minimum amount of token 0 to receive, prevents excessive slippage
+    /// * `minimum_token_1_amount` -  Minimum amount of token 1 to receive, prevents excessive slippage
+    ///
+    pub fn withdraw(
+        ctx: Context<Withdraw>,
+        lp_token_amount: u64,
+        minimum_token_0_amount: u64,
+        minimum_token_1_amount: u64,
     ) -> Result<()> {
-        handle_update_user_advanced_lp(ctx, _sub_account_id, advanced_lp)
-    }
-
-    pub fn reclaim_rent(ctx: Context<ReclaimRent>) -> Result<()> {
-        handle_reclaim_rent(ctx)
-    }
-
-    // Admin instructions
-    // will initialize different trading markets from here 
-
-
-    pub fn initialize(ctx: Context<Initialize>) -> Result<()> {
-        handle_admin_initialize(ctx)
-    }
-
-    pub fn initialize_spot_market(
-        ctx: Context<InitializeSpotMarket>,
-        optimal_utilization: u32,
-        optimal_borrow_rate: u32,
-        max_borrow_rate: u32,
-        oracle_source: OracleSource,
-        initial_asset_weight: u32,
-        maintenance_asset_weight: u32,
-        initial_liability_weight: u32,
-        maintenance_liability_weight: u32,
-        imf_factor: u32,
-        liquidator_fee: u32,
-        if_liquidation_fee: u32,
-        active_status: bool,
-        asset_tier: AssetTier,
-        scale_initial_asset_weight_start: u64,
-        withdraw_guard_threshold: u64,
-        order_tick_size: u64,
-        order_step_size: u64,
-        if_total_factor: u32,
-        name: [u8; 32],
-    ) -> Result<()> {
-        handle_initialize_spot_market(
+        withdraw(
             ctx,
-            optimal_utilization,
-            optimal_borrow_rate,
-            max_borrow_rate,
-            oracle_source,
-            initial_asset_weight,
-            maintenance_asset_weight,
-            initial_liability_weight,
-            maintenance_liability_weight,
-            imf_factor,
-            liquidator_fee,
-            if_liquidation_fee,
-            active_status,
-            asset_tier,
-            scale_initial_asset_weight_start,
-            withdraw_guard_threshold,
-            order_tick_size,
-            order_step_size,
-            if_total_factor,
-            name,
+            lp_token_amount,
+            minimum_token_0_amount,
+            minimum_token_1_amount,
         )
     }
 
-    pub fn delete_initialized_spot_market(
-        ctx: Context<DeleteInitializedSpotMarket>,
-        market_index: u16,
+    /// Swap the tokens in the pool base input amount
+    ///
+    /// # Arguments
+    ///
+    /// * `ctx`- The context of accounts
+    /// * `amount_in` -  input amount to transfer, output to DESTINATION is based on the exchange rate
+    /// * `minimum_amount_out` -  Minimum amount of output token, prevents excessive slippage
+    ///
+    pub fn swap_base_input(
+        ctx: Context<Swap>,
+        amount_in: u64,
+        minimum_amount_out: u64,
     ) -> Result<()> {
-        handle_delete_initialized_spot_market(ctx, market_index)
+        swap_base_input(ctx, amount_in, minimum_amount_out)
     }
 
-    pub fn deposit_into_spot_market_vault<'c: 'info, 'info>(
-        ctx: Context<'_, '_, 'c, 'info, DepositIntoSpotMarketVault<'info>>,
-        amount: u64,
-    ) -> Result<()> {
-        handle_deposit_into_spot_market_vault(ctx, amount)
-    }
-
-    pub fn deposit_into_spot_market_revenue_pool<'c: 'info, 'info>(
-        ctx: Context<'_, '_, 'c, 'info, RevenuePoolDeposit<'info>>,
-        amount: u64,
-    ) -> Result<()> {
-        handle_deposit_into_spot_market_revenue_pool(ctx, amount)
-    }
-
-    pub fn update_spot_market_liquidation_fee(
-        ctx: Context<AdminUpdateSpotMarket>,
-        liquidator_fee: u32,
-        if_liquidation_fee: u32,
-    ) -> Result<()> {
-        handle_update_spot_market_liquidation_fee(ctx, liquidator_fee, if_liquidation_fee)
-    }
-
-    pub fn update_spot_market_insurance_fund_factor(
-        ctx: Context<AdminUpdateSpotMarket>,
-        spot_market_index: u16,
-        user_if_factor: u32,
-        total_if_factor: u32,
-    ) -> Result<()> {
-        handle_update_spot_market_if_factor(ctx, spot_market_index, user_if_factor, total_if_factor)
-    }
-
-    pub fn update_spot_market_margin_weights(
-        ctx: Context<AdminUpdateSpotMarket>,
-        initial_asset_weight: u32,
-        maintenance_asset_weight: u32,
-        initial_liability_weight: u32,
-        maintenance_liability_weight: u32,
-        imf_factor: u32,
-    ) -> Result<()> {
-        handle_update_spot_market_margin_weights(
-            ctx,
-            initial_asset_weight,
-            maintenance_asset_weight,
-            initial_liability_weight,
-            maintenance_liability_weight,
-            imf_factor,
-        )
-    }
-
-    pub fn update_spot_market_borrow_rate(
-        ctx: Context<AdminUpdateSpotMarket>,
-        optimal_utilization: u32,
-        optimal_borrow_rate: u32,
-        max_borrow_rate: u32,
-        min_borrow_rate: Option<u8>,
-    ) -> Result<()> {
-        handle_update_spot_market_borrow_rate(
-            ctx,
-            optimal_utilization,
-            optimal_borrow_rate,
-            max_borrow_rate,
-            min_borrow_rate,
-        )
-    }
-
-    pub fn update_spot_market_max_token_deposits(
-        ctx: Context<AdminUpdateSpotMarket>,
-        max_token_deposits: u64,
-    ) -> Result<()> {
-        handle_update_spot_market_max_token_deposits(ctx, max_token_deposits)
-    }
-
-    pub fn update_spot_market_max_token_borrows(
-        ctx: Context<AdminUpdateSpotMarket>,
-        max_token_borrows_fraction: u16,
-    ) -> Result<()> {
-        handle_update_spot_market_max_token_borrows(ctx, max_token_borrows_fraction)
-    }
-
-    pub fn update_spot_market_scale_initial_asset_weight_start(
-        ctx: Context<AdminUpdateSpotMarket>,
-        scale_initial_asset_weight_start: u64,
-    ) -> Result<()> {
-        handle_update_spot_market_scale_initial_asset_weight_start(
-            ctx,
-            scale_initial_asset_weight_start,
-        )
-    }
-
-    pub fn update_spot_market_oracle(
-        ctx: Context<AdminUpdateSpotMarketOracle>,
-        oracle: Pubkey,
-        oracle_source: OracleSource,
-    ) -> Result<()> {
-        handle_update_spot_market_oracle(ctx, oracle, oracle_source)
-    }
-
-    pub fn update_spot_market_if_paused_operations(
-        ctx: Context<AdminUpdateSpotMarket>,
-        paused_operations: u8,
-    ) -> Result<()> {
-        handle_update_spot_market_if_paused_operations(ctx, paused_operations)
+    /// Swap the tokens in the pool base output amount
+    ///
+    /// # Arguments
+    ///
+    /// * `ctx`- The context of accounts
+    /// * `max_amount_in` -  input amount prevents excessive slippage
+    /// * `amount_out` -  amount of output token
+    ///
+    pub fn swap_base_output(ctx: Context<Swap>, max_amount_in: u64, amount_out: u64) -> Result<()> {
+        swap_base_output(ctx, max_amount_in, amount_out)
     }
 
 
-    pub fn update_spot_fee_structure(
-        ctx: Context<AdminUpdateState>,
-        fee_structure: FeeStructure,
-    ) -> Result<()> {
-        handle_update_spot_fee_structure(ctx, fee_structure)
-    }
-
-    pub fn update_initial_pct_to_liquidate(
-        ctx: Context<AdminUpdateState>,
-        initial_pct_to_liquidate: u16,
-    ) -> Result<()> {
-        handle_update_initial_pct_to_liquidate(ctx, initial_pct_to_liquidate)
-    }
-
-    pub fn update_liquidation_duration(
-        ctx: Context<AdminUpdateState>,
-        liquidation_duration: u8,
-    ) -> Result<()> {
-        handle_update_liquidation_duration(ctx, liquidation_duration)
-    }
-
-    pub fn update_state_max_initialize_user_fee(
-        ctx: Context<AdminUpdateState>,
-        max_initialize_user_fee: u16,
-    ) -> Result<()> {
-        handle_update_state_max_initialize_user_fee(ctx, max_initialize_user_fee)
-    }
-
-    pub fn update_whitelist_mint(
-        ctx: Context<AdminUpdateState>,
-        whitelist_mint: Pubkey,
-    ) -> Result<()> {
-        handle_update_whitelist_mint(ctx, whitelist_mint)
-    }
-
-
-    pub fn update_exchange_status(
-        ctx: Context<AdminUpdateState>,
-        exchange_status: u8,
-    ) -> Result<()> {
-        handle_update_exchange_status(ctx, exchange_status)
-    }
-
-    pub fn initialize_pyth_pull_oracle(
-        ctx: Context<InitPythPullPriceFeed>,
-        feed_id: [u8; 32],
-    ) -> Result<()> {
-        handle_initialize_pyth_pull_oracle(ctx, feed_id)
-    }
-
-    // trader bots
-    // bots will be responsible for taking orders and completing them
-    // will also do settlement like P&L settlement
-
-    pub fn fill_spot_order<'c: 'info, 'info>(
-        ctx: Context<'_, '_, 'c, 'info, FillOrder<'info>>,
-        order_id: Option<u32>,
-        fulfillment_type: Option<SpotFulfillmentType>,
-        maker_order_id: Option<u32>,
-    ) -> Result<()> {
-        handle_fill_spot_order(ctx, order_id, fulfillment_type, maker_order_id)
-    }
-
-    pub fn trigger_order<'c: 'info, 'info>(
-        ctx: Context<'_, '_, 'c, 'info, TriggerOrder<'info>>,
-        order_id: u32,
-    ) -> Result<()> {
-        handle_trigger_order(ctx, order_id)
-    }
-
-
-    pub fn update_user_idle<'c: 'info, 'info>(
-        ctx: Context<'_, '_, 'c, 'info, UpdateUserIdle<'info>>,
-    ) -> Result<()> {
-        handle_update_user_idle(ctx)
-    }
-
-    pub fn update_user_open_orders_count(ctx: Context<UpdateUserIdle>) -> Result<()> {
-        handle_update_user_open_orders_count(ctx)
-    }
-
-    pub fn liquidate_spot<'c: 'info, 'info>(
-        ctx: Context<'_, '_, 'c, 'info, LiquidateSpot<'info>>,
-        asset_market_index: u16,
-        liability_market_index: u16,
-        liquidator_max_liability_transfer: u128,
-        limit_price: Option<u64>, // asset/liaiblity
-    ) -> Result<()> {
-        handle_liquidate_spot(
-            ctx,
-            asset_market_index,
-            liability_market_index,
-            liquidator_max_liability_transfer,
-            limit_price,
-        )
-    }
-
-    pub fn resolve_spot_bankruptcy<'c: 'info, 'info>(
-        ctx: Context<'_, '_, 'c, 'info, ResolveBankruptcy<'info>>,
-        market_index: u16,
-    ) -> Result<()> {
-        handle_resolve_spot_bankruptcy(ctx, market_index)
-    }
-
-    pub fn update_spot_market_expiry(
-        ctx: Context<AdminUpdateSpotMarket>,
-        expiry_ts: i64,
-    ) -> Result<()> {
-        handle_update_spot_market_expiry(ctx, expiry_ts)
-    }
-
-    // Game Stake fns
+    // Methods to stake in game
     pub fn initialize_game(
         ctx: Context<InitGame>,
         game_id: [u8; 16],
@@ -439,6 +252,9 @@ pub mod vortex_contracts {
     ) -> Result<()> {
         handle_update_bet(ctx, bet_type,  game_id, user_betting_on_id, money_staked)
     }
+
+
+    //THis will be done by executors
 
     pub fn settle_all_bets(
         ctx: Context<SettleAllBetsForGame>,

@@ -1,6 +1,4 @@
 pub mod user;
-pub mod constraints;
-pub mod account;
-pub mod executors;
+pub mod initialize;
 pub mod admins;
 pub mod game_stake;
