@@ -1,9 +1,6 @@
 #![cfg(not(feature = "no-entrypoint"))]
 
-
-
-
-use anchor_lang::prelude::*;
+use solana_program::declare_id;
 use crate::{error::AmmError, processor::Processor};
 use solana_program::{
     account_info::AccountInfo, entrypoint, entrypoint::ProgramResult,

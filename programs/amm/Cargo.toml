@@ -9,16 +9,18 @@ crate-type = ["cdylib", "lib"]
 name = "amm"
 
 [features]
-no-entrypoint = []
-no-idl = []
-no-log-ix-name = []
-cpi = ["no-entrypoint"]
-default = []
+no-entrypoint = ["serum_dex/no-entrypoint"]
+program = ["serum_dex/program", "serum_dex/no-entrypoint"]
+default = ["program"]
+client = ["serum_dex/client"]
+devnet = []
+testnet = []
+
 
 [dependencies]
-solana-program = "<1.17.0"
+solana-program = "1.17.6"
 spl-token = { version = "4.0.0", features = ["no-entrypoint"] }
-spl-associated-token-account = { version = "2.2.0", features = [
+spl-associated-token-account = { version = "2.3.0", features = [
     "no-entrypoint",
 ] }
 serum_dex = { version = "0.5.10", git = "https://github.com/raydium-io/openbook-dex", features = [

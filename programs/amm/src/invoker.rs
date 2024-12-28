@@ -232,7 +232,7 @@ impl Invokers {
         let authority_signature_seeds = [amm_seed, &[nonce]];
         let signers = &[&authority_signature_seeds[..]];
 
-        let ix = openbook_dex::instruction::init_open_orders(
+        let ix = serum_dex::instruction::init_open_orders(
             dex_program.key,
             open_orders.key,
             open_orders_owner.key,
@@ -262,7 +262,7 @@ impl Invokers {
         let authority_signature_seeds = [amm_seed, &[nonce]];
         let signers = &[&authority_signature_seeds[..]];
 
-        let ix = openbook_dex::instruction::close_open_orders(
+        let ix = serum_dex::instruction::close_open_orders(
             dex_program.key,
             open_orders.key,
             open_orders_owner.key,
@@ -294,18 +294,18 @@ impl Invokers {
         rent_sysvar_id: &Pubkey,
         srm_account_referral: Option<&Pubkey>,
         program_id: &Pubkey,
-        side: openbook_dex::matching::Side,
+        side: serum_dex::matching::Side,
         limit_price: NonZeroU64,
         max_coin_qty: NonZeroU64,
-        order_type: openbook_dex::matching::OrderType,
+        order_type: serum_dex::matching::OrderType,
         client_order_id: u64,
-        self_trade_behavior: openbook_dex::instruction::SelfTradeBehavior,
+        self_trade_behavior: serum_dex::instruction::SelfTradeBehavior,
         limit: u16,
         max_native_pc_qty_including_fees: NonZeroU64,
         max_ts: i64,
-    ) -> Result<Instruction, openbook_dex::error::DexError> {
-        let data = openbook_dex::instruction::MarketInstruction::ReplaceOrderByClientId(
-            openbook_dex::instruction::NewOrderInstructionV3 {
+    ) -> Result<Instruction, serum_dex::error::DexError> {
+        let data = serum_dex::instruction::MarketInstruction::ReplaceOrderByClientId(
+            serum_dex::instruction::NewOrderInstructionV3 {
                 side,
                 limit_price,
                 max_coin_qty,
@@ -360,11 +360,11 @@ impl Invokers {
         amm_seed: &[u8],
         nonce: u8,
 
-        side: openbook_dex::matching::Side,
+        side: serum_dex::matching::Side,
         limit_price: NonZeroU64,
         max_coin_qty: NonZeroU64,
         max_native_pc_qty_including_fees: NonZeroU64,
-        order_type: openbook_dex::matching::OrderType,
+        order_type: serum_dex::matching::OrderType,
         client_order_id: u64,
         limit: u16,
     ) -> Result<(), ProgramError> {
@@ -396,7 +396,7 @@ impl Invokers {
             max_coin_qty,
             order_type,
             client_order_id,
-            openbook_dex::instruction::SelfTradeBehavior::CancelProvide,
+            serum_dex::instruction::SelfTradeBehavior::CancelProvide,
             limit,
             max_native_pc_qty_including_fees,
             i64::MAX,
@@ -443,11 +443,11 @@ impl Invokers {
         amm_seed: &[u8],
         nonce: u8,
 
-        side: openbook_dex::matching::Side,
+        side: serum_dex::matching::Side,
         limit_price: NonZeroU64,
         max_coin_qty: NonZeroU64,
         max_native_pc_qty_including_fees: NonZeroU64,
-        order_type: openbook_dex::matching::OrderType,
+        order_type: serum_dex::matching::OrderType,
         client_order_id: u64,
         limit: u16,
     ) -> Result<(), ProgramError> {
@@ -459,7 +459,7 @@ impl Invokers {
             srm_account_referral_key = Some(srm_account_referral_account.key);
         }
 
-        let ix = openbook_dex::instruction::new_order(
+        let ix = serum_dex::instruction::new_order(
             market.key,
             open_orders.key,
             req_q.key,
@@ -479,7 +479,7 @@ impl Invokers {
             max_coin_qty,
             order_type,
             client_order_id,
-            openbook_dex::instruction::SelfTradeBehavior::CancelProvide,
+            serum_dex::instruction::SelfTradeBehavior::CancelProvide,
             limit,
             max_native_pc_qty_including_fees,
             i64::MAX,
@@ -519,13 +519,13 @@ impl Invokers {
         amm_seed: &[u8],
         nonce: u8,
 
-        side: openbook_dex::matching::Side,
+        side: serum_dex::matching::Side,
         order_id: u128,
     ) -> Result<(), ProgramError> {
         let authority_signature_seeds = [amm_seed, &[nonce]];
         let signers = &[&authority_signature_seeds[..]];
 
-        let ix = openbook_dex::instruction::cancel_order(
+        let ix = serum_dex::instruction::cancel_order(
             dex_program.key,
             market.key,
             bids.key,
@@ -565,7 +565,7 @@ impl Invokers {
         let authority_signature_seeds = [amm_seed, &[nonce]];
         let signers = &[&authority_signature_seeds[..]];
 
-        let ix = openbook_dex::instruction::cancel_orders_by_client_order_ids(
+        let ix = serum_dex::instruction::cancel_orders_by_client_order_ids(
             dex_program.key,
             market.key,
             bids.key,
@@ -611,7 +611,7 @@ impl Invokers {
             referrer_pc_wallet_key = Some(referrer_pc_wallet_account.key);
         }
 
-        let ix = openbook_dex::instruction::settle_funds(
+        let ix = serum_dex::instruction::settle_funds(
             dex_program.key,
             market.key,
             spl_token_program.key,

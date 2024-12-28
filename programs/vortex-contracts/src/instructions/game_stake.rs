@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use num_traits::ToBytes;
 use solana_program::native_token::LAMPORTS_PER_SOL;
-use crate::{errors::DexError, game_stake::{BetType, Game, PlayerTotalBet, UserGameBet}, ids::admin_hot_wallet, load_mut, validate};
+use crate::{controllers, errors::DexError, ids::admin_hot_wallet, load_mut, state::game_stake::{BetType, Game, PlayerTotalBet, UserGameBet}, validate};
 
 
 

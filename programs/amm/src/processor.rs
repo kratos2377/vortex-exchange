@@ -1,22 +1,18 @@
 //! Program state processor
 #![allow(deprecated)]
 use crate::{
-    error::AmmError,
-    instruction::{
+    check_assert_eq, error::AmmError, instruction::{
         AdminCancelOrdersInstruction, AmmInstruction, ConfigArgs, DepositInstruction,
         InitializeInstruction2, MonitorStepInstruction, SetParamsInstruction, SimulateInstruction,
         SwapInstructionBaseIn, SwapInstructionBaseOut, WithdrawInstruction, WithdrawSrmInstruction,
-    },
-    invokers::Invokers,
-    math::{
+    }, invoker::Invokers, math::{
         Calculator, CheckedCeilDiv, InvariantPool, InvariantToken, RoundDirection, SwapDirection,
         U128, U256,
-    },
-    state::{
+    }, state::{
         AmmConfig, AmmInfo, AmmParams, AmmResetFlag, AmmState, AmmStatus, GetPoolData,
         GetSwapBaseInData, GetSwapBaseOutData, Loadable, RunCrankData, SimulateParams,
         TargetOrders, MAX_ORDER_LIMIT, TEN_THOUSAND,
-    },
+    }
 };
 
 use serum_dex::{

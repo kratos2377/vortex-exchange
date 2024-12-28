@@ -2,18 +2,31 @@ use crate::math::calculator::CurveCalculator;
 use crate::errors::DexError;
 use crate::state::*;
 use crate::utils::*;
+use account_load_utils::AccountLoad;
 use anchor_lang::{
     accounts::interface_account::InterfaceAccount,
     prelude::*,
     solana_program::{clock, program::invoke, system_instruction},
     system_program,
 };
+use anchor_spl::token::spl_token;
 use anchor_spl::{
     associated_token::AssociatedToken,
     token::Token,
     token_2022::spl_token_2022,
     token_interface::{Mint, TokenAccount, TokenInterface},
 };
+use config::AmmConfig;
+use math_utils::U128;
+use oracle::ObservationState;
+use oracle::OBSERVATION_SEED;
+use pool::PoolState;
+use pool::POOL_LP_MINT_SEED;
+use pool::POOL_SEED;
+use pool::POOL_VAULT_SEED;
+use token_utils::create_token_account;
+use token_utils::is_supported_mint;
+use token_utils::transfer_from_user_to_pool_vault;
 use std::ops::Deref;
 
 #[derive(Accounts)]
@@ -276,7 +289,7 @@ pub fn initialize(
         token_0_vault.amount,
         token_1_vault.amount
     );
-    token::token_mint_to(
+    token_utils::token_mint_to(
         ctx.accounts.authority.to_account_info(),
         ctx.accounts.token_program.to_account_info(),
         ctx.accounts.lp_mint.to_account_info(),
@@ -356,7 +369,7 @@ pub fn create_pool<'info>(
         require_eq!(pool_account_info.is_signer, true);
     }
 
-    token::create_or_allocate_account(
+    token_utils::create_or_allocate_account(
         &crate::id(),
         payer.to_account_info(),
         system_program.to_account_info(),
