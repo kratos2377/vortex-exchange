@@ -172,7 +172,7 @@ pub struct Initialize<'info> {
     pub rent: Sysvar<'info, Rent>,
 }
 
-pub fn initialize(
+pub fn handle_initialize(
     ctx: Context<Initialize>,
     init_amount_0: u64,
     init_amount_1: u64,

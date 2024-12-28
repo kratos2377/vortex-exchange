@@ -84,7 +84,7 @@ pub struct Swap<'info> {
     pub observation_state: AccountLoader<'info, ObservationState>,
 }
 
-pub fn swap_base_input(ctx: Context<Swap>, amount_in: u64, minimum_amount_out: u64) -> Result<()> {
+pub fn handle_swap_base_input(ctx: Context<Swap>, amount_in: u64, minimum_amount_out: u64) -> Result<()> {
     let block_timestamp = solana_program::clock::Clock::get()?.unix_timestamp as u64;
     let pool_id = ctx.accounts.pool_state.key();
     let pool_state = &mut ctx.accounts.pool_state.load_mut()?;
@@ -269,7 +269,7 @@ pub fn swap_base_input(ctx: Context<Swap>, amount_in: u64, minimum_amount_out: u
 }
 
 
-pub fn swap_base_output(
+pub fn handle_swap_base_output(
     ctx: Context<Swap>,
     max_amount_in: u64,
     amount_out_less_fee: u64,
@@ -545,7 +545,7 @@ pub struct Withdraw<'info> {
     pub memo_program: UncheckedAccount<'info>,
 }
 
-pub fn withdraw(
+pub fn handle_withdraw(
     ctx: Context<Withdraw>,
     lp_token_amount: u64,
     minimum_token_0_amount: u64,
@@ -741,7 +741,7 @@ pub struct Deposit<'info> {
     pub lp_mint: Box<InterfaceAccount<'info, Mint>>,
 }
 
-pub fn deposit(
+pub fn handle_deposit(
     ctx: Context<Deposit>,
     lp_token_amount: u64,
     maximum_token_0_amount: u64,

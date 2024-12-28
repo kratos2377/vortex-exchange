@@ -96,7 +96,7 @@ fn set_new_fund_owner(amm_config: &mut Account<AmmConfig>, new_fund_owner: Pubke
     Ok(())
 }
 
-pub fn update_pool_status(ctx: Context<UpdatePoolStatus>, status: u8) -> Result<()> {
+pub fn handle_update_pool_status(ctx: Context<UpdatePoolStatus>, status: u8) -> Result<()> {
     require_gte!(255, status);
     let mut pool_state = ctx.accounts.pool_state.load_mut()?;
     pool_state.set_status(status);
@@ -104,7 +104,7 @@ pub fn update_pool_status(ctx: Context<UpdatePoolStatus>, status: u8) -> Result<
     Ok(())
 }
 
-pub fn collect_protocol_fee(
+pub fn handle_collect_protocol_fee(
     ctx: Context<CollectProtocolFee>,
     amount_0_requested: u64,
     amount_1_requested: u64,
@@ -164,7 +164,7 @@ pub fn collect_protocol_fee(
 }
 
 
-pub fn collect_fund_fee(
+pub fn handle_collect_fund_fee(
     ctx: Context<CollectFundFee>,
     amount_0_requested: u64,
     amount_1_requested: u64,

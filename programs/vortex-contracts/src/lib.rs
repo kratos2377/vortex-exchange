@@ -94,7 +94,7 @@ pub mod vortex_contracts {
     /// * `status` - The vaule of status
     ///
     pub fn update_pool_status(ctx: Context<UpdatePoolStatus>, status: u8) -> Result<()> {
-        update_pool_status(ctx, status)
+        handle_update_pool_status(ctx, status)
     }
 
     /// Collect the protocol fee accrued to the pool
@@ -110,7 +110,7 @@ pub mod vortex_contracts {
         amount_0_requested: u64,
         amount_1_requested: u64,
     ) -> Result<()> {
-        collect_protocol_fee(ctx, amount_0_requested, amount_1_requested)
+        handle_collect_protocol_fee(ctx, amount_0_requested, amount_1_requested)
     }
 
     /// Collect the fund fee accrued to the pool
@@ -126,7 +126,7 @@ pub mod vortex_contracts {
         amount_0_requested: u64,
         amount_1_requested: u64,
     ) -> Result<()> {
-        collect_fund_fee(ctx, amount_0_requested, amount_1_requested)
+        handle_collect_fund_fee(ctx, amount_0_requested, amount_1_requested)
     }
 
     /// Creates a pool for the given token pair and the initial price
@@ -144,7 +144,7 @@ pub mod vortex_contracts {
         init_amount_1: u64,
         open_time: u64,
     ) -> Result<()> {
-        initialize(ctx, init_amount_0, init_amount_1, open_time)
+        handle_initialize(ctx, init_amount_0, init_amount_1, open_time)
     }
 
     /// Creates a pool for the given token pair and the initial price
@@ -162,7 +162,7 @@ pub mod vortex_contracts {
         maximum_token_0_amount: u64,
         maximum_token_1_amount: u64,
     ) -> Result<()> {
-        deposit(
+        handle_deposit(
             ctx,
             lp_token_amount,
             maximum_token_0_amount,
@@ -185,7 +185,7 @@ pub mod vortex_contracts {
         minimum_token_0_amount: u64,
         minimum_token_1_amount: u64,
     ) -> Result<()> {
-        withdraw(
+        handle_withdraw(
             ctx,
             lp_token_amount,
             minimum_token_0_amount,
@@ -206,7 +206,7 @@ pub mod vortex_contracts {
         amount_in: u64,
         minimum_amount_out: u64,
     ) -> Result<()> {
-        swap_base_input(ctx, amount_in, minimum_amount_out)
+        handle_swap_base_input(ctx, amount_in, minimum_amount_out)
     }
 
     /// Swap the tokens in the pool base output amount
@@ -218,7 +218,7 @@ pub mod vortex_contracts {
     /// * `amount_out` -  amount of output token
     ///
     pub fn swap_base_output(ctx: Context<Swap>, max_amount_in: u64, amount_out: u64) -> Result<()> {
-        swap_base_output(ctx, max_amount_in, amount_out)
+        handle_swap_base_output(ctx, max_amount_in, amount_out)
     }
 
 
