@@ -11,10 +11,13 @@ path="src/lib.rs"
 
 [features]
 no-entrypoint = []
+no-idl = []
 no-log-ix-name = []
 cpi = ["no-entrypoint"]
-default = ["devnet"]
-devnet=[]
+default = []
+enable-log = []
+devnet = []
+client = []
 
 
 [dependencies]

@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use num_traits::ToBytes;
 use solana_program::native_token::LAMPORTS_PER_SOL;
-use crate::{controllers, errors::DexError, ids::admin_hot_wallet, load_mut, state::game_stake::{BetType, Game, PlayerTotalBet, UserGameBet}, validate};
+use crate::{controllers, errors::DexError,  load_mut, state::game_stake::{BetType, Game, PlayerTotalBet, UserGameBet}, validate};
 
 
 
@@ -66,7 +66,7 @@ pub fn handle_init_player_bet(
     let total_lamports_to_be_transferred = (total_money_staked * LAMPORTS_PER_SOL) as u64;
     &solana_program::system_instruction::transfer(
         &admin_user_key,
-        &admin_hot_wallet::id(),
+        &crate::admin::id(),
         total_lamports_to_be_transferred,
     );
 
@@ -112,7 +112,7 @@ pub fn handle_user_bet(
     let total_lamports_to_be_transferred = (money_staked * LAMPORTS_PER_SOL) as u64;
     &solana_program::system_instruction::transfer(
         &user_bet_wallet_key.key(),
-        &admin_hot_wallet::id(),
+        &crate::admin::id(),
         total_lamports_to_be_transferred,
     );
 
@@ -142,7 +142,7 @@ pub fn handle_update_bet(
     let total_lamports_to_be_transferred = (money_staked * LAMPORTS_PER_SOL) as u64;
     &solana_program::system_instruction::transfer(
         &user_bet_wallet_key,
-        &admin_hot_wallet::id(),
+        &crate::admin::id(),
         total_lamports_to_be_transferred,
     );
 
@@ -173,7 +173,7 @@ pub fn handle_settle_all_bets_for_game(
 
     let total_lamports_to_be_transferred = (money_to_be_rewarded_to_user * LAMPORTS_PER_SOL) as u64;
         &solana_program::system_instruction::transfer(
-            &admin_hot_wallet::id(),
+            &crate::admin::id(),
             user_bet_wallet_key,
             total_lamports_to_be_transferred,
         );

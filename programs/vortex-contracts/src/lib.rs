@@ -7,27 +7,36 @@ pub mod state;
 pub mod utils;
 pub mod instructions;
 pub mod macros;
-pub mod ids;
 pub mod safe_methods;
 pub mod math;
 pub mod controllers;
 use crate::state::{game_stake::* , config::* , oracle::* , load_ref::* , pool::* };
 use crate::instructions::{admins::* , game_stake::* , initialize::* , user::*};
 
+
+#[cfg(feature = "devnet")]
+declare_id!("HkApQpEsdzdfHsedkuZvNEbmcQXfabobbb9Yf8wdz7AZ");
+#[cfg(not(feature = "devnet"))]
+declare_id!("HkApQpEsdzdfHsedkuZvNEbmcQXfabobbb9Yf8wdz7AZ");
+
+
 pub mod admin {
     use anchor_lang::prelude::declare_id;
     #[cfg(feature = "devnet")]
-    declare_id!("adMCyoCgfkg7bQiJ9aBJ59H3BXLY3r5LNLfPpQfMzBe");
+    declare_id!("4SxWFybWqHYYpMXaf1uByp1AgBV8vi8vn7mp7yLAXsH3");
+    #[cfg(not(feature = "devnet"))]
+    declare_id!("4SxWFybWqHYYpMXaf1uByp1AgBV8vi8vn7mp7yLAXsH3");
 }
 
 pub mod create_pool_fee_reveiver {
     use anchor_lang::prelude::declare_id;
     #[cfg(feature = "devnet")]
-    declare_id!("G11FKBRaAkHAKuLCgLM6K6NUc9rTjPAznRCjZifrTQe2");
+    declare_id!("4SxWFybWqHYYpMXaf1uByp1AgBV8vi8vn7mp7yLAXsH3");
+    #[cfg(not(feature = "devnet"))]
+    declare_id!("4SxWFybWqHYYpMXaf1uByp1AgBV8vi8vn7mp7yLAXsH3");
 }
 
-#[cfg(feature = "devnet")]
-declare_id!("HkApQpEsdzdfHsedkuZvNEbmcQXfabobbb9Yf8wdz7AZ");
+
 
 pub const AUTH_SEED: &str = "vault_and_lp_mint_auth_seed";
 

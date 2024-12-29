@@ -9,13 +9,11 @@ crate-type = ["cdylib", "lib"]
 name = "amm"
 
 [features]
-no-entrypoint = ["serum_dex/no-entrypoint"]
-program = ["serum_dex/program", "serum_dex/no-entrypoint"]
-default = ["program"]
-client = ["serum_dex/client"]
-devnet = []
-testnet = []
-
+no-entrypoint = []
+no-log-ix-name = []
+cpi = ["no-entrypoint"]
+default = ["devnet"]
+devnet=[]
 
 [dependencies]
 solana-program = "1.17.6"

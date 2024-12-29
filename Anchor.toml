@@ -9,11 +9,18 @@ skip-lint = false
 amm = "2VN7F63kL5N7AXHqFW7VYdr7b7CANQA5iM1GbTNZVbXE"
 vortex_contracts = "HkApQpEsdzdfHsedkuZvNEbmcQXfabobbb9Yf8wdz7AZ"
 
+
+[programs.devnet]
+amm = "2VN7F63kL5N7AXHqFW7VYdr7b7CANQA5iM1GbTNZVbXE"
+vortex_contracts = "HkApQpEsdzdfHsedkuZvNEbmcQXfabobbb9Yf8wdz7AZ"
+
 [registry]
 url = "https://api.apr.dev"
 
+
+
 [provider]
-cluster = "Localnet"
+cluster = "devnet"
 wallet = "/home/monarch/.config/solana/id.json"
 
 [scripts]
