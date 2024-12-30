@@ -36,6 +36,7 @@ pub struct InitializePool<'info> {
 
     // authority so 1 acc pass in can derive all other pdas 
     #[account(seeds=[b"authority", pool_state.key().as_ref()], bump)]
+      /// CHECK: This is not dangerous because we don't read or write from this account
     pub pool_authority: AccountInfo<'info>,
 
     // account to hold token X
