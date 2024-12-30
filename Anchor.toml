@@ -6,7 +6,6 @@ seeds = false
 skip-lint = false
 
 [programs.localnet]
-amm = "2VN7F63kL5N7AXHqFW7VYdr7b7CANQA5iM1GbTNZVbXE"
 vortex_contracts = "HkApQpEsdzdfHsedkuZvNEbmcQXfabobbb9Yf8wdz7AZ"
 
 
