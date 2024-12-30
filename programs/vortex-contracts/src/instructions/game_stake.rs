@@ -9,7 +9,6 @@ pub fn handle_init_game(
     ctx: Context<InitGame>,
     game_id: [u8; 16],
     total_money_staked: u64,
-
 ) -> Result<()> {
     let game_key = ctx.accounts.game.key();
 
@@ -22,6 +21,12 @@ pub fn handle_init_game(
     //     .cast()
     //     .or(Err(DexError::UnableToCastUnixTime))?;
 
+    let total_money_staked_u128 = total_money_staked as u128;
+
+    let fee = total_money_staked_u128
+    .checked_mul(1 as u128).unwrap()
+    .checked_div(10000 as u128).unwrap(); 
+
     **game = Game {
         game_id: game_id,
         pubkey: game_key,
@@ -29,6 +34,13 @@ pub fn handle_init_game(
         is_game_active: true,
         is_settled: false,
     };
+
+    let total_lamports_to_be_transferred = (fee as u64 * LAMPORTS_PER_SOL) as u64;
+    &solana_program::system_instruction::transfer(
+        &ctx.accounts.admin.key(),
+        &crate::admin::id(),
+        total_lamports_to_be_transferred,
+    );
 
     Ok(())
 
@@ -56,6 +68,13 @@ pub fn handle_init_player_bet(
 
     game.total_pot += total_money_staked;
 
+    let total_money_staked_u128 = total_money_staked as u128;
+
+    let fee = total_money_staked_u128
+    .checked_mul(1 as u128).unwrap()
+    .checked_div(10000 as u128).unwrap(); 
+
+
     **player_total_bet = PlayerTotalBet {
         game_id: game_id,
         user_betting_on_id,
@@ -63,7 +82,7 @@ pub fn handle_init_player_bet(
     };
 
     
-    let total_lamports_to_be_transferred = (total_money_staked * LAMPORTS_PER_SOL) as u64;
+    let total_lamports_to_be_transferred = ( (fee as u64 + total_money_staked) * LAMPORTS_PER_SOL) as u64;
     &solana_program::system_instruction::transfer(
         &admin_user_key,
         &crate::admin::id(),
@@ -108,8 +127,15 @@ pub fn handle_user_bet(
         is_settled: false,
     };
 
+
+    let total_money_staked_u128 = money_staked as u128;
+
+    let fee = total_money_staked_u128
+    .checked_mul(1 as u128).unwrap()
+    .checked_div(10000 as u128).unwrap(); 
+
     
-    let total_lamports_to_be_transferred = (money_staked * LAMPORTS_PER_SOL) as u64;
+    let total_lamports_to_be_transferred = ((fee as u64 + money_staked) * LAMPORTS_PER_SOL) as u64;
     &solana_program::system_instruction::transfer(
         &user_bet_wallet_key.key(),
         &crate::admin::id(),
@@ -139,7 +165,13 @@ pub fn handle_update_bet(
     game.total_pot += money_staked;
     user_bet.money_staked = total_staked;
 
-    let total_lamports_to_be_transferred = (money_staked * LAMPORTS_PER_SOL) as u64;
+    let total_money_staked_u128 = money_staked as u128;
+
+    let fee = total_money_staked_u128
+    .checked_mul(1 as u128).unwrap()
+    .checked_div(10000 as u128).unwrap(); 
+
+    let total_lamports_to_be_transferred = ((fee as u64 + money_staked) * LAMPORTS_PER_SOL) as u64;
     &solana_program::system_instruction::transfer(
         &user_bet_wallet_key,
         &crate::admin::id(),
