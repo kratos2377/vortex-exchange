@@ -4,7 +4,7 @@ use anchor_spl::{
     token::{Token, TokenAccount, Transfer},
 };
 
-use crate::state::pool::PoolState;
+use crate::{load_mut, state::pool::PoolState};
 use crate::errors::DexError;
 
 pub fn handle_swap(
@@ -18,7 +18,7 @@ pub fn handle_swap(
 
     let u128_amount_in = amount_in as u128;
 
-    let pool_state = &ctx.accounts.pool_state; 
+    let pool_state = load_mut!(&ctx.accounts.pool_state)?; 
     let src_vault_amount = ctx.accounts.vault_src.amount as u128;
     let dst_vault_amount = ctx.accounts.vault_dst.amount as u128;
 
@@ -38,7 +38,7 @@ pub fn handle_swap(
     require!(output_amount >= min_amount_out as u128, DexError::NotEnoughOut);
 
     // output_amount -> user_dst
-    let bump = ctx.bumps.pool_authority;
+     let bump = *ctx.bumps.get("pool_authority").unwrap();
     let pool_key = ctx.accounts.pool_state.key();
     let pda_sign = &[b"authority", pool_key.as_ref(), &[bump]];
     
@@ -69,9 +69,10 @@ pub struct Swap<'info> {
 
     // pool token accounts 
     #[account(mut)]
-    pub pool_state: Box<Account<'info, PoolState>>,
+    pub pool_state: AccountLoader<'info, PoolState>,
 
     #[account(mut, seeds=[b"authority", pool_state.key().as_ref()], bump)]
+    /// CHECK: This is not dangerous because we don't read or write from this account
     pub pool_authority: AccountInfo<'info>,
     #[account(mut, 
         constraint=vault_src.owner == pool_authority.key(),

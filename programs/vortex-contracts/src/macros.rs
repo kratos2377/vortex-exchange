@@ -57,7 +57,7 @@ macro_rules! load_mut {
     ($account_loader:expr) => {{
         $account_loader.load_mut().map_err(|e| {
             msg!("e {:?}", e);
-            let error_code = DexError::UnableToLoadAccountLoader;
+            let error_code = $crate::errors::DexError::UnableToLoadAccountLoader;
             msg!("Error {} thrown at {}:{}", error_code, file!(), line!());
             error_code
         })

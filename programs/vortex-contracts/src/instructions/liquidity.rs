@@ -4,7 +4,7 @@ use anchor_spl::{
     token::{Mint, MintTo, Token, TokenAccount, Transfer, Burn},
 };
 
-use crate::{errors::DexError, state::pool::PoolState};
+use crate::{errors::DexError, load_mut, state::pool::PoolState, utils::account_load_utils::AccountLoad};
 
 pub fn handle_add_liquidity(
     ctx: Context<LiquidityOperation>, 
@@ -24,7 +24,7 @@ pub fn handle_add_liquidity(
 
     let vault_balance0 = ctx.accounts.vault0.amount;
     let vault_balance1 = ctx.accounts.vault1.amount;
-    let pool_state = &mut ctx.accounts.pool_state; 
+    let pool_state = &mut load_mut!(ctx.accounts.pool_state)?; 
     
     let deposit0 = amount_liq0;
     // vars to fill out during if statement  
@@ -74,7 +74,7 @@ pub fn handle_add_liquidity(
             authority: ctx.accounts.pool_authority.to_account_info(),
         }
     );
-    let bump = ctx.bumps.pool_authority;
+    let bump = *ctx.bumps.get("pool_authority").unwrap();
     let pool_key = ctx.accounts.pool_state.key();
     let pda_sign = &[b"authority", pool_key.as_ref(), &[bump]];
     token::mint_to(
@@ -113,7 +113,7 @@ pub fn handle_remove_liquidity(
     require!(burn_amount <= pool_mint_balance, DexError::NotEnoughBalance);
 
     let pool_key = ctx.accounts.pool_state.key();
-    let state = &mut ctx.accounts.pool_state;
+    let state = &mut load_mut!(ctx.accounts.pool_state)?;
     require!(state.total_amount_minted >= burn_amount, DexError::BurnTooMuch);
     
     let vault0_amount = ctx.accounts.vault0.amount as u128;
@@ -131,7 +131,7 @@ pub fn handle_remove_liquidity(
     ];
 
     // deposit user funds into vaults
-    let bump = ctx.bumps.pool_authority;
+    let bump = *ctx.bumps.get("pool_authority").unwrap();
     let pda_sign = &[b"authority", pool_key.as_ref(), &[bump]];
     token::transfer(CpiContext::new(
         ctx.accounts.token_program.to_account_info(), 
@@ -171,9 +171,10 @@ pub struct LiquidityOperation<'info> {
 
     // pool token accounts 
     #[account(mut)]
-    pub pool_state: Box<Account<'info, PoolState>>,
+    pub pool_state: AccountLoader<'info, PoolState>,
     
     #[account(seeds=[b"authority", pool_state.key().as_ref()], bump)]
+    /// CHECK: This is not dangerous because we don't read or write from this account
     pub pool_authority: AccountInfo<'info>,
     #[account(mut, 
         constraint = vault0.mint == user0.mint,

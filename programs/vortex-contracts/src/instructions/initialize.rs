@@ -3,7 +3,7 @@ use anchor_spl::{
     associated_token::AssociatedToken,
     token::{Mint, Token, TokenAccount},
 };
-use crate::state::pool::PoolState;
+use crate::{load_mut, state::pool::PoolState};
 
 pub fn handle_initialize(
     ctx: Context<InitializePool>, 
@@ -11,7 +11,7 @@ pub fn handle_initialize(
     fee_denominator: u64,
 ) -> Result<()> {
 
-    let pool_state = &mut ctx.accounts.pool_state;
+    let pool_state = &mut load_mut!(ctx.accounts.pool_state)?;
     pool_state.fee_numerator = fee_numerator;
     pool_state.fee_denominator = fee_denominator;
     pool_state.total_amount_minted = 0; 
@@ -32,7 +32,7 @@ pub struct InitializePool<'info> {
         seeds=[b"pool_state", mint0.key().as_ref(), mint1.key().as_ref()], 
         bump,
     )]
-    pub pool_state: Box<Account<'info, PoolState>>,
+    pub pool_state: AccountLoader<'info, PoolState>,
 
     // authority so 1 acc pass in can derive all other pdas 
     #[account(seeds=[b"authority", pool_state.key().as_ref()], bump)]

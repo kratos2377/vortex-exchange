@@ -10,13 +10,13 @@ pub mod macros;
 pub mod safe_methods;
 pub mod controllers;
 use crate::state::{game_stake::* , load_ref::* , pool::* };
-use crate::instructions::{liquidity::*, game_stake::* , initialize::* , user::*};
+use crate::instructions::{liquidity::*, game_stake::* , user::*};
 
 
 #[cfg(feature = "devnet")]
-declare_id!("5uqk7mfmHBf2fi8FBAzsDnZ4uYgNjHbh4mn4SNzfzAfn");
+declare_id!("4TKQybhrJ5oHwrBiwe4jRT3mtQFxpxfgoHBoxHj4KUc4");
 #[cfg(not(feature = "devnet"))]
-declare_id!("5uqk7mfmHBf2fi8FBAzsDnZ4uYgNjHbh4mn4SNzfzAfn");
+declare_id!("4TKQybhrJ5oHwrBiwe4jRT3mtQFxpxfgoHBoxHj4KUc4");
 
 
 pub mod admin {
@@ -34,13 +34,13 @@ pub mod vortex_contracts {
 
     use super::*;
 
-    pub fn initialize_pool(
-        ctx: Context<InitializePool>, 
-        fee_numerator: u64,
-        fee_denominator: u64,
-    ) -> Result<()> {
-        handle_initialize(ctx, fee_numerator, fee_denominator)
-    }
+    // pub fn initialize_pool(
+    //     ctx: Context<InitializePool>, 
+    //     fee_numerator: u64,
+    //     fee_denominator: u64,
+    // ) -> Result<()> {
+    //     handle_initialize(ctx, fee_numerator, fee_denominator)
+    // }
 
     pub fn remove_liquidity(
         ctx: Context<LiquidityOperation>, 
