@@ -14,9 +14,9 @@ use crate::instructions::{liquidity::*, game_stake::* , initialize::* , user::*}
 
 
 #[cfg(feature = "devnet")]
-declare_id!("HkApQpEsdzdfHsedkuZvNEbmcQXfabobbb9Yf8wdz7AZ");
+declare_id!("vortexsdzdfHsedkuZvNEbmcQXfabobbb9Yf8wdz7V1");
 #[cfg(not(feature = "devnet"))]
-declare_id!("HkApQpEsdzdfHsedkuZvNEbmcQXfabobbb9Yf8wdz7AZ");
+declare_id!("vortexsdzdfHsedkuZvNEbmcQXfabobbb9Yf8wdz7V1");
 
 
 pub mod admin {
