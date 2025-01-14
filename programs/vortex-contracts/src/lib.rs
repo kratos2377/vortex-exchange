@@ -9,14 +9,14 @@ pub mod instructions;
 pub mod macros;
 pub mod safe_methods;
 pub mod controllers;
-use crate::state::{game_stake::* , load_ref::* , pool::* };
-use crate::instructions::{liquidity::*, game_stake::* , user::*};
+use crate::state::game_stake::*;
+use crate::instructions::game_stake::*;
 
 
 #[cfg(feature = "devnet")]
-declare_id!("4TKQybhrJ5oHwrBiwe4jRT3mtQFxpxfgoHBoxHj4KUc4");
+declare_id!("E6cVbjdMGBT1LT7HpuLZrGh4y7gXaATvTD6yNySmZamu");
 #[cfg(not(feature = "devnet"))]
-declare_id!("4TKQybhrJ5oHwrBiwe4jRT3mtQFxpxfgoHBoxHj4KUc4");
+declare_id!("E6cVbjdMGBT1LT7HpuLZrGh4y7gXaATvTD6yNySmZamu");
 
 
 pub mod admin {
@@ -33,37 +33,6 @@ pub mod vortex_contracts {
 
 
     use super::*;
-
-    // pub fn initialize_pool(
-    //     ctx: Context<InitializePool>, 
-    //     fee_numerator: u64,
-    //     fee_denominator: u64,
-    // ) -> Result<()> {
-    //     handle_initialize(ctx, fee_numerator, fee_denominator)
-    // }
-
-    pub fn remove_liquidity(
-        ctx: Context<LiquidityOperation>, 
-        burn_amount: u64,
-    ) -> Result<()> {
-        handle_remove_liquidity(ctx, burn_amount)
-    }
-
-    pub fn add_liquidity(
-        ctx: Context<LiquidityOperation>, 
-        amount_liq0: u64, 
-        amount_liq1: u64, 
-    ) -> Result<()> {
-        handle_add_liquidity(ctx, amount_liq0, amount_liq1)
-    }
-
-    pub fn swap(
-        ctx: Context<Swap>, 
-        amount_in: u64, 
-        min_amount_out: u64,
-    ) -> Result<()> {
-        handle_swap(ctx, amount_in, min_amount_out)
-    }
 
     // Methods to stake in game
     pub fn initialize_game(
