@@ -15,7 +15,7 @@ pub struct Game {
 }
 
 impl Game {
-    pub const SIZE: usize = 8 + 16 + 32 + 8  + 1  + 1 + 21;
+    pub const SIZE: usize = 8 + 16 + 32 + 8  + 1  + 1 + 21 + 8;
 }
 
 #[account(zero_copy(unsafe))]
@@ -32,7 +32,7 @@ pub struct UserGameBet {
 }
 
 impl UserGameBet {
-    pub const SIZE: usize = 8 + 16 + 32 + 16 + 4 + 8  + 1 + 21;
+    pub const SIZE: usize = 8 + 16 + 32 + 16 + 4 + 8  + 1 + 21 + 8;
 }
 
 #[account(zero_copy(unsafe))]
@@ -46,7 +46,7 @@ pub struct PlayerTotalBet {
 }
 
 impl PlayerTotalBet {
-    pub const SIZE: usize =  8 + 16 + 16 +  8 + 21;
+    pub const SIZE: usize =  8 + 16 + 16 +  8 + 21 + 8;
 }
 
 

@@ -22,7 +22,7 @@ pub fn handle_init_game(
     //     .cast()
     //     .or(Err(DexError::UnableToCastUnixTime))?;
 
-    let total_money_staked_u128 = total_money_staked as u128;
+    let total_money_staked_u128 = 1 as u128;
 
     let fee = total_money_staked_u128
     .checked_mul(1 as u128).unwrap()
