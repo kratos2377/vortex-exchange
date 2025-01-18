@@ -3,47 +3,49 @@ use borsh::{BorshDeserialize, BorshSerialize};
 
 
 #[account(zero_copy(unsafe))]
-#[derive(PartialEq, Eq, Debug)]
+#[derive(PartialEq, Debug)]
 #[repr(C)]
 pub struct Game {
     pub game_id: [u8;16],
     pub pubkey: Pubkey,
-    pub total_pot: u64,
+    pub total_pot: f64,
     pub is_game_active: bool,
     pub is_settled: bool,
 }
 
 impl Game {
-    pub const SIZE: usize = 65;
+    pub const SIZE: usize = 8 + 16 + 32 + 8  + 1  + 1;
 }
 
 #[account(zero_copy(unsafe))]
-#[derive( PartialEq, Eq, Debug)]
+#[derive( PartialEq, Debug)]
 #[repr(C)]
 pub struct UserGameBet {
     pub game_id: [u8;16],
     pub user_bet_wallet_key: Pubkey,
     pub user_betting_on_id: [u8;16],
     pub bet_type: BetType,
-    pub money_staked: u64,
+    pub money_staked: f64 ,
     pub is_settled: bool,
+    pub session_id: [u8;21],
 }
 
 impl UserGameBet {
-    pub const SIZE: usize = 80;
+    pub const SIZE: usize = 8 + 16 + 32 + 16 + 4 + 8  + 1 + 21;
 }
 
 #[account(zero_copy(unsafe))]
-#[derive( PartialEq, Eq, Debug)]
+#[derive( PartialEq, Debug)]
 #[repr(C)]
 pub struct PlayerTotalBet {
     pub game_id: [u8;16],
     pub user_betting_on_id: [u8;16],
-    pub total_money_staked_on_player: u64,
+    pub total_money_staked_on_player: f64,
+    pub session_id: [u8;21],
 }
 
 impl PlayerTotalBet {
-    pub const SIZE: usize = 50;
+    pub const SIZE: usize =  8 + 16 + 16 +  8 + 21;
 }
 
 

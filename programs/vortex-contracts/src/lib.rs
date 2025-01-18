@@ -38,21 +38,41 @@ pub mod vortex_contracts {
     pub fn initialize_game(
         ctx: Context<InitGame>,
         game_id: [u8; 16],
-        total_money_staked: u64,
-    
+        total_money_staked: f64,
+        session_id: [u8;21]
     ) -> Result<()> {
-        handle_init_game(ctx, game_id, total_money_staked)
+        handle_init_game(ctx, game_id, total_money_staked , session_id)
     }
+
+
+    pub fn update_game_status(
+        ctx: Context<UpdateGameStatus>,
+        game_id: [u8; 16],
+        session_id: [u8;21]
+    ) -> Result<()> {
+        handle_update_game_status(ctx, game_id , session_id)
+    }
+
+
+    pub fn update_game_is_settled_status(
+        ctx: Context<UpdateGameSettleStatus>,
+        game_id: [u8; 16],
+        session_id: [u8;21]
+    ) -> Result<()> {
+        handle_update_game_is_settled_status(ctx, game_id , session_id)
+    }
+
 
 
     pub fn initialize_player_bet(
         ctx: Context<InitPlayerBet>,
         game_id: [u8; 16],
-        total_money_staked: u64,
-        user_betting_on_id: [u8;16]
+        total_money_staked: f64,
+        user_betting_on_id: [u8;16],
+        session_id: [u8;21]
     
     ) -> Result<()> {
-        handle_init_player_bet(ctx, game_id, total_money_staked, user_betting_on_id)
+        handle_init_player_bet(ctx, game_id, total_money_staked, user_betting_on_id, session_id)
     }
 
 
@@ -61,11 +81,11 @@ pub mod vortex_contracts {
         ctx: Context<MakeUserGameBet>,
         game_id: [u8; 16],
         user_betting_on_id: [u8;16],
-        money_staked: u64,
-        bet_type: BetType
-    
+        money_staked: f64,
+        bet_type: BetType,
+         session_id: [u8;21]
     ) -> Result<()> {
-        handle_user_bet(ctx, game_id, user_betting_on_id, money_staked, bet_type)
+        handle_user_bet(ctx, game_id, user_betting_on_id, money_staked, bet_type , session_id)
     }
 
 
@@ -75,7 +95,7 @@ pub mod vortex_contracts {
         bet_type: BetType,
         game_id: [u8;16],
         user_betting_on_id: [u8;16],
-        money_staked: u64,
+        money_staked: f64,
     
     ) -> Result<()> {
         handle_update_bet(ctx, bet_type,  game_id, user_betting_on_id, money_staked)

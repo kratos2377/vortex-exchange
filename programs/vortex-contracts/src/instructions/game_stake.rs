@@ -8,7 +8,8 @@ use crate::{controllers, errors::DexError,  load_mut, state::game_stake::{BetTyp
 pub fn handle_init_game(
     ctx: Context<InitGame>,
     game_id: [u8; 16],
-    total_money_staked: u64,
+    total_money_staked: f64,
+    session_id: [u8;21]
 ) -> Result<()> {
     let game_key = ctx.accounts.game.key();
 
@@ -30,13 +31,13 @@ pub fn handle_init_game(
     **game = Game {
         game_id: game_id,
         pubkey: game_key,
-        total_pot: total_money_staked,
+        total_pot: total_money_staked as f64,
         is_game_active: true,
         is_settled: false,
     };
 
     let total_lamports_to_be_transferred = (fee as u64 * LAMPORTS_PER_SOL) as u64;
-    &solana_program::system_instruction::transfer(
+    let _ = &solana_program::system_instruction::transfer(
         &ctx.accounts.admin.key(),
         &crate::admin::id(),
         total_lamports_to_be_transferred,
@@ -46,12 +47,46 @@ pub fn handle_init_game(
 
 }
 
+
+
+pub fn handle_update_game_status(
+    ctx: Context<UpdateGameStatus>,
+    game_id: [u8; 16],
+    session_id: [u8;21]
+) -> Result<()> {
+
+
+    let mut game = load_mut!(ctx.accounts.game)?;
+
+    game.is_game_active = false;
+
+    Ok(())
+
+}
+
+
+pub fn handle_update_game_is_settled_status(
+    ctx: Context<UpdateGameSettleStatus>,
+    game_id: [u8; 16],
+    session_id: [u8;21]
+) -> Result<()> {
+
+
+    let mut game = load_mut!(ctx.accounts.game)?;
+
+    game.is_settled = true;
+
+    Ok(())
+
+}
+
+
 pub fn handle_init_player_bet(
     ctx: Context<InitPlayerBet>,
     game_id: [u8; 16],
-    total_money_staked: u64,
-    user_betting_on_id: [u8;16]
-
+    total_money_staked: f64,
+    user_betting_on_id: [u8;16],
+    session_id: [u8;21]
 ) -> Result<()> {
     let game_key = ctx.accounts.game.key();
     let admin_user_key = ctx.accounts.admin.key();
@@ -78,12 +113,13 @@ pub fn handle_init_player_bet(
     **player_total_bet = PlayerTotalBet {
         game_id: game_id,
         user_betting_on_id,
-        total_money_staked_on_player: total_money_staked,
+        total_money_staked_on_player: total_money_staked as f64,
+        session_id: session_id,
     };
 
     
-    let total_lamports_to_be_transferred = ( (fee as u64 + total_money_staked) * LAMPORTS_PER_SOL) as u64;
-    &solana_program::system_instruction::transfer(
+    let total_lamports_to_be_transferred = ( (fee as u64 + total_money_staked.ceil() as u64) * LAMPORTS_PER_SOL) as u64;
+    let _ = &solana_program::system_instruction::transfer(
         &admin_user_key,
         &crate::admin::id(),
         total_lamports_to_be_transferred,
@@ -99,8 +135,9 @@ pub fn handle_user_bet(
     ctx: Context<MakeUserGameBet>,
     game_id: [u8; 16],
     user_betting_on_id: [u8;16],
-    money_staked: u64,
-    bet_type: BetType
+    money_staked: f64,
+    bet_type: BetType,
+    session_id: [u8;21]
 ) -> Result<()> {
     let user_bet_account_model = load_mut!(ctx.accounts.user_bet)?;
     let user_bet_wallet_key = ctx.accounts.user_bet_wallet_key.key();
@@ -125,6 +162,7 @@ pub fn handle_user_bet(
         user_betting_on_id,
         money_staked,
         is_settled: false,
+        session_id: session_id
     };
 
 
@@ -135,8 +173,8 @@ pub fn handle_user_bet(
     .checked_div(10000 as u128).unwrap(); 
 
     
-    let total_lamports_to_be_transferred = ((fee as u64 + money_staked) * LAMPORTS_PER_SOL) as u64;
-    &solana_program::system_instruction::transfer(
+    let total_lamports_to_be_transferred = ((fee as u64 + money_staked.ceil() as u64) * LAMPORTS_PER_SOL) as u64;
+    let _ = &solana_program::system_instruction::transfer(
         &user_bet_wallet_key.key(),
         &crate::admin::id(),
         total_lamports_to_be_transferred,
@@ -152,7 +190,7 @@ pub fn handle_update_bet(
     bet_type: BetType,
     game_id: [u8;16],
     user_betting_on_id: [u8;16],
-    money_staked: u64,
+    money_staked: f64,
 ) -> Result<()> {
     let mut user_bet = load_mut!(ctx.accounts.user_bet)?;
     let mut player_total_bet = load_mut!(ctx.accounts.player_total_bet)?;
@@ -171,8 +209,8 @@ pub fn handle_update_bet(
     .checked_mul(1 as u128).unwrap()
     .checked_div(10000 as u128).unwrap(); 
 
-    let total_lamports_to_be_transferred = ((fee as u64 + money_staked) * LAMPORTS_PER_SOL) as u64;
-    &solana_program::system_instruction::transfer(
+    let total_lamports_to_be_transferred = ((fee as u64 + money_staked.ceil() as u64) * LAMPORTS_PER_SOL) as u64;
+    let _ = &solana_program::system_instruction::transfer(
         &user_bet_wallet_key,
         &crate::admin::id(),
         total_lamports_to_be_transferred,
@@ -203,8 +241,8 @@ pub fn handle_settle_all_bets_for_game(
         game.total_pot
     );
 
-    let total_lamports_to_be_transferred = (money_to_be_rewarded_to_user * LAMPORTS_PER_SOL) as u64;
-        &solana_program::system_instruction::transfer(
+    let total_lamports_to_be_transferred = (money_to_be_rewarded_to_user.floor() as u64 * LAMPORTS_PER_SOL);
+        let _ = &solana_program::system_instruction::transfer(
             &crate::admin::id(),
             user_bet_wallet_key,
             total_lamports_to_be_transferred,
@@ -214,12 +252,12 @@ pub fn handle_settle_all_bets_for_game(
 }
 
 #[derive(Accounts)]
-#[instruction(game_id: [u8;16])]
+#[instruction(game_id: [u8;16] , session_id: [u8;21])]
 pub struct InitGame<'info> {
 // in this case payer should be some global admin
     #[account(
         init,
-        seeds = [b"game", game_id.as_ref()],
+        seeds = [b"game", game_id.as_ref() , session_id.as_ref()],
         bump,
         space = Game::SIZE,
         payer = admin
@@ -232,12 +270,47 @@ pub struct InitGame<'info> {
 
 
 #[derive(Accounts)]
-#[instruction(game_id: [u8;16], user_betting_on_id: [u8;16])]
+#[instruction(game_id: [u8;16] , session_id: [u8;21])]
+pub struct UpdateGameStatus<'info> {
+// in this case payer should be some global admin
+    #[account(
+        init,
+        seeds = [b"game", game_id.as_ref() , session_id.as_ref()],
+        bump,
+        space = Game::SIZE,
+        payer = admin
+    )]
+    pub game: AccountLoader<'info, Game>,
+    #[account(mut)]
+    pub admin: Signer<'info>,
+    pub system_program: Program<'info, System>,
+}
+
+
+#[derive(Accounts)]
+#[instruction(game_id: [u8;16] , session_id: [u8;21])]
+pub struct UpdateGameSettleStatus<'info> {
+// in this case payer should be some global admin
+    #[account(
+        init,
+        seeds = [b"game", game_id.as_ref() , session_id.as_ref()],
+        bump,
+        space = Game::SIZE,
+        payer = admin
+    )]
+    pub game: AccountLoader<'info, Game>,
+    #[account(mut)]
+    pub admin: Signer<'info>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+#[instruction(game_id: [u8;16], user_betting_on_id: [u8;16] , session_id: [u8;16])]
 pub struct InitPlayerBet<'info> {
 // in this case payer should be some global admin
     #[account(
         init,
-        seeds = [b"player_bet", game_id.as_ref() , user_betting_on_id.as_ref()],
+        seeds = [b"player_bet", game_id.as_ref() , user_betting_on_id.as_ref() , session_id.as_ref()],
         bump,
         space = PlayerTotalBet::SIZE,
         payer = admin
@@ -245,7 +318,7 @@ pub struct InitPlayerBet<'info> {
     pub player_total_bet: AccountLoader<'info, PlayerTotalBet>,
     #[account(
         mut,
-        seeds = [b"game", game_id.as_ref()],
+        seeds = [b"game", game_id.as_ref() , session_id.as_ref()],
         bump,
     )]
     pub game: AccountLoader<'info, Game>,
@@ -256,11 +329,11 @@ pub struct InitPlayerBet<'info> {
 
 
 #[derive(Accounts)]
-#[instruction(game_id: [u8;16], user_betting_on_id: [u8;16])]
+#[instruction(game_id: [u8;16], user_betting_on_id: [u8;16], session_id: [u8;21])]
 pub struct MakeUserGameBet<'info> {
 
     #[account(
-        init,  seeds = [b"user_game_bet", game_id.as_ref(), user_betting_on_id.as_ref(), user_bet_wallet_key.key.as_ref()],
+        init,  seeds = [b"user_game_bet", game_id.as_ref(), user_betting_on_id.as_ref(), user_bet_wallet_key.key.as_ref(), session_id.as_ref()],
         bump,
         space = UserGameBet::SIZE,
         payer = user_bet_wallet_key
@@ -268,13 +341,13 @@ pub struct MakeUserGameBet<'info> {
     pub user_bet: AccountLoader<'info, UserGameBet>,
     #[account(
         mut,
-        seeds = [b"player_bet", game_id.as_ref() , user_betting_on_id.as_ref()],
+        seeds = [b"player_bet", game_id.as_ref() , user_betting_on_id.as_ref() , session_id.as_ref()],
         bump
     )]
     pub player_total_bet: AccountLoader<'info, PlayerTotalBet>,
     #[account(
         mut,
-        seeds = [b"game", game_id.as_ref()],
+        seeds = [b"game", game_id.as_ref() , session_id.as_ref()],
         bump
     )]
     pub game: AccountLoader<'info, Game>,
@@ -285,24 +358,24 @@ pub struct MakeUserGameBet<'info> {
 
 
 #[derive(Accounts)]
-#[instruction(game_id: [u8;16], user_betting_on_id: [u8;16])]
+#[instruction(game_id: [u8;16], user_betting_on_id: [u8;16] , session_id: [u8;21])]
 pub struct UpdateUserGameBet<'info> {
 
     #[account(
         mut,
-        seeds = [b"user_game_bet",  game_id.as_ref(), user_betting_on_id.as_ref(), user_bet_wallet_key.key.as_ref()],
+        seeds = [b"user_game_bet",  game_id.as_ref(), user_betting_on_id.as_ref(), user_bet_wallet_key.key.as_ref() , session_id.as_ref()],
         bump
     )]
     pub user_bet: AccountLoader<'info, UserGameBet>,
     #[account(
         mut,
-        seeds = [b"game", game_id.as_ref()],
+        seeds = [b"game", game_id.as_ref() , session_id.as_ref()],
         bump
     )]
     pub game: AccountLoader<'info, Game>,
     #[account(
         mut,
-        seeds = [b"player_bet", game_id.as_ref() , user_betting_on_id.as_ref()],
+        seeds = [b"player_bet", game_id.as_ref() , user_betting_on_id.as_ref(), session_id.as_ref()],
         bump
     )]
     pub player_total_bet: AccountLoader<'info, PlayerTotalBet>, 
@@ -311,24 +384,24 @@ pub struct UpdateUserGameBet<'info> {
 
 
 #[derive(Accounts)]
-#[instruction(game_id: [u8;16], user_betting_on_id: [u8;16])]
+#[instruction(game_id: [u8;16], user_betting_on_id: [u8;16], session_id: [u8;21])]
 pub struct SettleAllBetsForGame<'info> {
 
     #[account(
         mut,
-        seeds = [b"user_game_bet", game_id.as_ref(), user_betting_on_id.as_ref(), user_bet_wallet_key.key.as_ref()],
+        seeds = [b"user_game_bet", game_id.as_ref(), user_betting_on_id.as_ref(), user_bet_wallet_key.key.as_ref() , session_id.as_ref()],
         bump
     )]
     pub user_bet: AccountLoader<'info, UserGameBet>,
     #[account(
         mut,
-        seeds = [b"game", game_id.as_ref()],
+        seeds = [b"game", game_id.as_ref(), session_id.as_ref()],
         bump
     )]
     pub game: AccountLoader<'info, Game>,
     #[account(
         mut,
-        seeds = [b"player_bet", game_id.as_ref(), user_betting_on_id.as_ref()],
+        seeds = [b"player_bet", game_id.as_ref(), user_betting_on_id.as_ref(), session_id.as_ref()],
         bump
     )]
     pub player_bet: AccountLoader<'info, PlayerTotalBet>,
