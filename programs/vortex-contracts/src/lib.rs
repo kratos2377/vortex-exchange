@@ -14,9 +14,9 @@ use crate::instructions::game_stake::*;
 
 
 #[cfg(feature = "devnet")]
-declare_id!("E6cVbjdMGBT1LT7HpuLZrGh4y7gXaATvTD6yNySmZamu");
+declare_id!("G14f7SaAsRFziTQdqDPQvgfZJKfXhfVq2WrLggDxJRF6");
 #[cfg(not(feature = "devnet"))]
-declare_id!("E6cVbjdMGBT1LT7HpuLZrGh4y7gXaATvTD6yNySmZamu");
+declare_id!("G14f7SaAsRFziTQdqDPQvgfZJKfXhfVq2WrLggDxJRF6");
 
 
 pub mod admin {
