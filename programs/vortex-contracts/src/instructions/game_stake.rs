@@ -38,11 +38,19 @@ pub fn handle_init_game(
     };
 
     let total_lamports_to_be_transferred = (fee as u64 * LAMPORTS_PER_SOL) as u64;
-    let _ = &solana_program::system_instruction::transfer(
+    let transfer_ix = solana_program::system_instruction::transfer(
         &ctx.accounts.admin.key(),
         &crate::admin::id(),
-        total_lamports_to_be_transferred,
+        total_lamports_to_be_transferred
     );
+
+    solana_program::program::invoke(
+        &transfer_ix,
+        &[
+            ctx.accounts.admin.to_account_info(),
+            ctx.accounts.system_program.to_account_info(),
+        ],
+    )?;
 
     Ok(())
 
