@@ -11,10 +11,11 @@ pub struct Game {
     pub total_pot: f64,
     pub is_game_active: bool,
     pub is_settled: bool,
+    pub session_id: [u8;21]
 }
 
 impl Game {
-    pub const SIZE: usize = 8 + 16 + 32 + 8  + 1  + 1;
+    pub const SIZE: usize = 8 + 16 + 32 + 8  + 1  + 1 + 21;
 }
 
 #[account(zero_copy(unsafe))]
