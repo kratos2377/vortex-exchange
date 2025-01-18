@@ -8,8 +8,8 @@ use crate::{controllers, errors::DexError,  load_mut, state::game_stake::{BetTyp
 pub fn handle_init_game(
     ctx: Context<InitGame>,
     game_id: [u8; 16],
-    total_money_staked: f64,
-    session_id: [u8;21]
+    session_id: [u8;21],
+    total_money_staked: f64
 ) -> Result<()> {
     let game_key = ctx.accounts.game.key();
 
@@ -85,9 +85,9 @@ pub fn handle_update_game_is_settled_status(
 pub fn handle_init_player_bet(
     ctx: Context<InitPlayerBet>,
     game_id: [u8; 16],
-    total_money_staked: f64,
     user_betting_on_id: [u8;16],
-    session_id: [u8;21]
+    session_id: [u8;21],
+    total_money_staked: f64
 ) -> Result<()> {
     let game_key = ctx.accounts.game.key();
     let admin_user_key = ctx.accounts.admin.key();
@@ -136,9 +136,9 @@ pub fn handle_user_bet(
     ctx: Context<MakeUserGameBet>,
     game_id: [u8; 16],
     user_betting_on_id: [u8;16],
+    session_id: [u8;21],
     money_staked: f64,
-    bet_type: BetType,
-    session_id: [u8;21]
+    bet_type: BetType
 ) -> Result<()> {
     let user_bet_account_model = load_mut!(ctx.accounts.user_bet)?;
     let user_bet_wallet_key = ctx.accounts.user_bet_wallet_key.key();
@@ -188,10 +188,11 @@ pub fn handle_user_bet(
 
 pub fn handle_update_bet(
     ctx: Context<UpdateUserGameBet>,
-    bet_type: BetType,
     game_id: [u8;16],
     user_betting_on_id: [u8;16],
-    money_staked: f64,
+    session_id: [u8;21],
+    bet_type: BetType,
+    money_staked: f64
 ) -> Result<()> {
     let mut user_bet = load_mut!(ctx.accounts.user_bet)?;
     let mut player_total_bet = load_mut!(ctx.accounts.player_total_bet)?;
@@ -224,10 +225,11 @@ pub fn handle_update_bet(
 
 pub fn handle_settle_all_bets_for_game(
     ctx: Context<SettleAllBetsForGame>,
-    bet_type: BetType,
     game_id: [u8;16],
     user_betting_on_id: [u8;16],
-    winner_id: [u8;16],
+    session_id: [u8;21],
+    bet_type: BetType,
+    winner_id: [u8;16]
 ) -> Result<()> {
     let user_bet_wallet_key = &ctx.accounts.user_bet_wallet_key.key();
     let game = load_mut!(ctx.accounts.game)?;

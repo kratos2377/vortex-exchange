@@ -38,10 +38,10 @@ pub mod vortex_contracts {
     pub fn initialize_game(
         ctx: Context<InitGame>,
         game_id: [u8; 16],
+        session_id: [u8;21],
         total_money_staked: f64,
-        session_id: [u8;21]
     ) -> Result<()> {
-        handle_init_game(ctx, game_id, total_money_staked , session_id)
+        handle_init_game(ctx, game_id,session_id, total_money_staked )
     }
 
 
@@ -67,12 +67,12 @@ pub mod vortex_contracts {
     pub fn initialize_player_bet(
         ctx: Context<InitPlayerBet>,
         game_id: [u8; 16],
-        total_money_staked: f64,
         user_betting_on_id: [u8;16],
-        session_id: [u8;21]
+        session_id: [u8;21],
+        total_money_staked: f64
     
     ) -> Result<()> {
-        handle_init_player_bet(ctx, game_id, total_money_staked, user_betting_on_id, session_id)
+        handle_init_player_bet(ctx, game_id, user_betting_on_id, session_id, total_money_staked)
     }
 
 
@@ -81,24 +81,25 @@ pub mod vortex_contracts {
         ctx: Context<MakeUserGameBet>,
         game_id: [u8; 16],
         user_betting_on_id: [u8;16],
+        session_id: [u8;21],
         money_staked: f64,
-        bet_type: BetType,
-         session_id: [u8;21]
+        bet_type: BetType
     ) -> Result<()> {
-        handle_user_bet(ctx, game_id, user_betting_on_id, money_staked, bet_type , session_id)
+        handle_user_bet(ctx, game_id, user_betting_on_id, session_id , money_staked, bet_type )
     }
 
 
         
     pub fn update_user_bet(
         ctx: Context<UpdateUserGameBet>,
-        bet_type: BetType,
         game_id: [u8;16],
         user_betting_on_id: [u8;16],
-        money_staked: f64,
+        session_id: [u8;21],
+        bet_type: BetType,
+        money_staked: f64
     
     ) -> Result<()> {
-        handle_update_bet(ctx, bet_type,  game_id, user_betting_on_id, money_staked)
+        handle_update_bet(ctx,   game_id, user_betting_on_id, session_id , bet_type, money_staked)
     }
 
 
@@ -106,13 +107,14 @@ pub mod vortex_contracts {
 
     pub fn settle_all_bets(
         ctx: Context<SettleAllBetsForGame>,
-        bet_type: BetType,
         game_id: [u8;16],
         user_betting_on_id: [u8;16],
+        session_id: [u8;21],
+        bet_type: BetType,
         winner_id: [u8;16],
     
     ) -> Result<()> {
-        handle_settle_all_bets_for_game(ctx, bet_type,  game_id, user_betting_on_id, winner_id)
+        handle_settle_all_bets_for_game(ctx,   game_id, user_betting_on_id, session_id ,bet_type, winner_id)
     }
 
 
