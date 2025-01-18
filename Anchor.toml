@@ -6,11 +6,11 @@ seeds = false
 skip-lint = false
 
 [programs.localnet]
-vortex_contracts = "G14f7SaAsRFziTQdqDPQvgfZJKfXhfVq2WrLggDxJRF6"
+vortex_contracts = "7AoniGPArfPa5ADdpAdWYsBE6tGjxyqWj1XVCGeWxPGB"
 
 
 [programs.devnet]
-vortex_contracts = "G14f7SaAsRFziTQdqDPQvgfZJKfXhfVq2WrLggDxJRF6"
+vortex_contracts = "7AoniGPArfPa5ADdpAdWYsBE6tGjxyqWj1XVCGeWxPGB"
 
 [registry]
 url = "https://api.apr.dev"
