@@ -109,22 +109,29 @@ pub fn handle_init_player_bet(
 
     require!(game.is_game_active == true , DexError::GameHasEnded);
 
+    
+    let total_money_staked_u128 = total_money_staked as u128;
+
+    let fee = total_money_staked_u128
+    .checked_mul(2 as u128).unwrap()
+    .checked_div(10000 as u128).unwrap();
+
+    
+    validate!(ctx.accounts.admin.lamports() > total_money_staked as u64 + fee as u64, DexError::NotEnoughBalance);
+
     let player_total_bet = &mut ctx.accounts.player_total_bet.load_init()?;
+
+    //Player total bet acts as the total bet on 1 player in 1 game in 1 particular session
+    //The UserGameBet we are initializing here represents the bet the player bet on himself
+    let user_game_bet = &mut ctx.accounts.user_bet.load_init()?;
     // let clock = Clock::get()?;
     // let now = clock
     //     .unix_timestamp
     //     .cast()
     //     .or(Err(DexError::UnableToCastUnixTime))?;
 
-    validate!(ctx.accounts.admin.lamports() > total_money_staked.ceil() as u64 , DexError::NotEnoughBalance);
 
-    game.total_pot += total_money_staked;
 
-    let total_money_staked_u128 = total_money_staked as u128;
-
-    let fee = total_money_staked_u128
-    .checked_mul(1 as u128).unwrap()
-    .checked_div(10000 as u128).unwrap(); 
 
 
     **player_total_bet = PlayerTotalBet {
@@ -134,8 +141,18 @@ pub fn handle_init_player_bet(
         session_id: session_id,
     };
 
+    **user_game_bet = UserGameBet{
+        game_id,
+        user_bet_wallet_key: admin_user_key,
+        user_betting_on_id,
+        bet_type: BetType::WIN,
+        money_staked: total_money_staked,
+        is_settled: false,
+        session_id,
+    };
+    game.total_pot += total_money_staked;
     
-    let total_lamports_to_be_transferred = ( (fee as u64 + total_money_staked.ceil() as u64) * LAMPORTS_PER_SOL) as u64;
+    let total_lamports_to_be_transferred = ( (fee as u64 + total_money_staked as u64) * LAMPORTS_PER_SOL) as u64;
 
     let transfer_ix = solana_program::system_instruction::transfer(
         &ctx.accounts.admin.key(),
@@ -163,7 +180,6 @@ pub fn handle_user_bet(
     user_betting_on_id: [u8;16],
     session_id: [u8;21],
     money_staked: f64,
-    bet_type: BetType
 ) -> Result<()> {
     let user_bet_account_model = load_mut!(ctx.accounts.user_bet)?;
     let user_bet_wallet_key = ctx.accounts.user_bet_wallet_key.key();
@@ -171,9 +187,21 @@ pub fn handle_user_bet(
 
     require!(game.is_game_active == true , DexError::GameHasEnded);
 
-    let mut player_bet = load_mut!(ctx.accounts.player_total_bet)?;
-
+    
     validate!(user_bet_account_model.session_id == session_id, DexError::AlreadyMadeABetOnGame );
+
+
+    let total_money_staked_u128 = money_staked as u128;
+
+    let fee = total_money_staked_u128
+    .checked_mul(1 as u128).unwrap()
+    .checked_div(10000 as u128).unwrap(); 
+
+
+    validate!(ctx.accounts.user_bet_wallet_key.lamports() > money_staked as u64 + fee as u64 , DexError::NotEnoughBalance);
+
+
+    let mut player_bet = load_mut!(ctx.accounts.player_total_bet)?;
 
     let user_bet = &mut ctx.accounts.user_bet.load_init()?;
     // let clock = Clock::get()?;
@@ -186,7 +214,7 @@ pub fn handle_user_bet(
     player_bet.total_money_staked_on_player += money_staked;
     **user_bet = UserGameBet {
         game_id,
-        bet_type: bet_type,
+        bet_type: BetType::WIN,
         user_bet_wallet_key: user_bet_wallet_key,
         user_betting_on_id,
         money_staked,
@@ -195,15 +223,11 @@ pub fn handle_user_bet(
     };
 
 
-    validate!(ctx.accounts.user_bet_wallet_key.lamports() > money_staked.ceil() as u64 , DexError::NotEnoughBalance);
-    let total_money_staked_u128 = money_staked as u128;
+  
 
-    let fee = total_money_staked_u128
-    .checked_mul(1 as u128).unwrap()
-    .checked_div(10000 as u128).unwrap(); 
 
     
-    let total_lamports_to_be_transferred = ((fee as u64 + money_staked.ceil() as u64) * LAMPORTS_PER_SOL) as u64;
+    let total_lamports_to_be_transferred = ((fee as u64 + money_staked as u64) * LAMPORTS_PER_SOL) as u64;
 
     let transfer_ix = solana_program::system_instruction::transfer(
         &ctx.accounts.user_bet_wallet_key.key(),
@@ -231,7 +255,6 @@ pub fn handle_update_bet(
     game_id: [u8;16],
     user_betting_on_id: [u8;16],
     session_id: [u8;21],
-    bet_type: BetType,
     money_staked: f64
 ) -> Result<()> {
     let mut user_bet = load_mut!(ctx.accounts.user_bet)?;
@@ -240,23 +263,27 @@ pub fn handle_update_bet(
 
     require!(game.is_game_active == true , DexError::GameHasEnded);
 
-    let user_bet_wallet_key = ctx.accounts.user_bet_wallet_key.key();
-    validate!(user_bet.user_betting_on_id == user_betting_on_id && user_bet.bet_type != bet_type, DexError::UserHasDifferentBetType);
-
+    validate!(user_bet.user_betting_on_id == user_betting_on_id , DexError::UserHasDifferentBetType);
+    
     validate!(ctx.accounts.user_bet_wallet_key.lamports() > money_staked.ceil() as u64 , DexError::NotEnoughBalance);
+
+    
+    let total_money_staked_u128 = money_staked as u128;
+    let fee = total_money_staked_u128
+    .checked_mul(1 as u128).unwrap()
+    .checked_div(10000 as u128).unwrap(); 
+
+
+    validate!(ctx.accounts.user_bet_wallet_key.lamports() > money_staked as u64 + fee as u64 , DexError::NotEnoughBalance);
+
 
     let total_staked = user_bet.money_staked + money_staked;
     player_total_bet.total_money_staked_on_player += money_staked;
     game.total_pot += money_staked;
     user_bet.money_staked = total_staked;
 
-    let total_money_staked_u128 = money_staked as u128;
 
-    let fee = total_money_staked_u128
-    .checked_mul(1 as u128).unwrap()
-    .checked_div(10000 as u128).unwrap(); 
-
-    let total_lamports_to_be_transferred = ((fee as u64 + money_staked.ceil() as u64) * LAMPORTS_PER_SOL) as u64;
+    let total_lamports_to_be_transferred = ((fee as u64 + money_staked as u64) * LAMPORTS_PER_SOL) as u64;
 
 
     let transfer_ix = solana_program::system_instruction::transfer(
@@ -284,7 +311,6 @@ pub fn handle_settle_all_bets_for_game(
     game_id: [u8;16],
     user_betting_on_id: [u8;16],
     session_id: [u8;21],
-    bet_type: BetType,
     winner_id: [u8;16]
 ) -> Result<()> {
     let user_bet_wallet_key = &ctx.accounts.user_bet_wallet_key.key();
@@ -303,7 +329,7 @@ pub fn handle_settle_all_bets_for_game(
         game.total_pot
     );
 
-    let total_lamports_to_be_transferred = (money_to_be_rewarded_to_user.floor() as u64 * LAMPORTS_PER_SOL);
+    let total_lamports_to_be_transferred = (money_to_be_rewarded_to_user as u64 * LAMPORTS_PER_SOL);
 
         
     let transfer_ix = solana_program::system_instruction::transfer(
@@ -391,6 +417,13 @@ pub struct InitPlayerBet<'info> {
         payer = admin
     )]
     pub player_total_bet: AccountLoader<'info, PlayerTotalBet>,
+    #[account(
+        init,  seeds = [b"user_game_bet", game_id.as_ref(), user_betting_on_id.as_ref(), admin.key.as_ref(), session_id.as_ref()],
+        bump,
+        space = UserGameBet::SIZE,
+        payer = admin
+    )]
+    pub user_bet: AccountLoader<'info, UserGameBet>,
     #[account(
         mut,
         seeds = [b"game", game_id.as_ref() , session_id.as_ref()],

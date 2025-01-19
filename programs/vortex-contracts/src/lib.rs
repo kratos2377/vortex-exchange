@@ -82,10 +82,9 @@ pub mod vortex_contracts {
         game_id: [u8; 16],
         user_betting_on_id: [u8;16],
         session_id: [u8;21],
-        money_staked: f64,
-        bet_type: BetType
+        money_staked: f64
     ) -> Result<()> {
-        handle_user_bet(ctx, game_id, user_betting_on_id, session_id , money_staked, bet_type )
+        handle_user_bet(ctx, game_id, user_betting_on_id, session_id , money_staked )
     }
 
 
@@ -95,11 +94,10 @@ pub mod vortex_contracts {
         game_id: [u8;16],
         user_betting_on_id: [u8;16],
         session_id: [u8;21],
-        bet_type: BetType,
         money_staked: f64
     
     ) -> Result<()> {
-        handle_update_bet(ctx,   game_id, user_betting_on_id, session_id , bet_type, money_staked)
+        handle_update_bet(ctx,   game_id, user_betting_on_id, session_id, money_staked)
     }
 
 
@@ -110,11 +108,10 @@ pub mod vortex_contracts {
         game_id: [u8;16],
         user_betting_on_id: [u8;16],
         session_id: [u8;21],
-        bet_type: BetType,
         winner_id: [u8;16],
     
     ) -> Result<()> {
-        handle_settle_all_bets_for_game(ctx,   game_id, user_betting_on_id, session_id ,bet_type, winner_id)
+        handle_settle_all_bets_for_game(ctx,   game_id, user_betting_on_id, session_id , winner_id)
     }
 
 
