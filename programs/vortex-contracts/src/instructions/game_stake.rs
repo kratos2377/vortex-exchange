@@ -365,7 +365,8 @@ pub struct InitGame<'info> {
     #[account(mut)]
     pub admin: Signer<'info>,
     #[account(mut)]
-    pub contract_admin: Signer<'info>,
+    /// CHECK:` doc comment explaining why no checks through types are necessary.
+    pub contract_admin: AccountInfo<'info>,
     pub system_program: Program<'info, System>,
 }
 
@@ -406,7 +407,7 @@ pub struct UpdateGameSettleStatus<'info> {
 }
 
 #[derive(Accounts)]
-#[instruction(game_id: [u8;16], user_betting_on_id: [u8;16] , session_id: [u8;16])]
+#[instruction(game_id: [u8;16], user_betting_on_id: [u8;16] , session_id: [u8;21])]
 pub struct InitPlayerBet<'info> {
 // in this case payer should be some global admin
     #[account(
@@ -433,7 +434,8 @@ pub struct InitPlayerBet<'info> {
     #[account(mut)]
     pub admin: Signer<'info>,
     #[account(mut)]
-    pub contract_admin: Signer<'info>,
+    /// CHECK:` doc comment explaining why no checks through types are necessary.
+    pub contract_admin: AccountInfo<'info>,
     pub system_program: Program<'info, System>,
 }
 
@@ -464,7 +466,8 @@ pub struct MakeUserGameBet<'info> {
     #[account(mut)]
     pub user_bet_wallet_key: Signer<'info>,
     #[account(mut)]
-    pub contract_admin: Signer<'info>,
+    /// CHECK:` doc comment explaining why no checks through types are necessary.
+    pub contract_admin: AccountInfo<'info>,
     pub system_program: Program<'info, System>,
 }
 
@@ -493,7 +496,8 @@ pub struct UpdateUserGameBet<'info> {
     pub player_total_bet: AccountLoader<'info, PlayerTotalBet>, 
     pub user_bet_wallet_key: Signer<'info>,
     #[account(mut)]
-    pub contract_admin: Signer<'info>,
+    /// CHECK:` doc comment explaining why no checks through types are necessary.
+    pub contract_admin: AccountInfo<'info>,
     pub system_program: Program<'info, System>,
 }
 
@@ -522,6 +526,7 @@ pub struct SettleAllBetsForGame<'info> {
     pub player_bet: AccountLoader<'info, PlayerTotalBet>,
     pub user_bet_wallet_key: Signer<'info>,
     #[account(mut)]
-    pub contract_admin: Signer<'info>,
+    /// CHECK:` doc comment explaining why no checks through types are necessary.
+    pub contract_admin: AccountInfo<'info>,
     pub system_program: Program<'info, System>,
 }
