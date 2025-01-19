@@ -68,7 +68,11 @@ pub fn handle_update_game_status(
 ) -> Result<()> {
 
 
+    validate!(ctx.accounts.admin.key() == crate::admin::id() , DexError::OnlyAdminCanChangeGameStates);
+
     let mut game = load_mut!(ctx.accounts.game)?;
+
+
 
     game.is_game_active = false;
 
@@ -83,7 +87,7 @@ pub fn handle_update_game_is_settled_status(
     session_id: [u8;21]
 ) -> Result<()> {
 
-
+    validate!(ctx.accounts.admin.key() == crate::admin::id() , DexError::OnlyAdminCanChangeGameStates);
     let mut game = load_mut!(ctx.accounts.game)?;
 
     game.is_settled = true;
@@ -312,6 +316,7 @@ pub fn handle_settle_all_bets_for_game(
     let game = load_mut!(ctx.accounts.game)?;
 
     require!(game.is_game_active != true , DexError::GameIsStillGoingOn);
+    validate!(ctx.accounts.admin.key() == crate::admin::id() , DexError::OnlyAdminCanSettleBets);
 
     let user_bet = load_mut!(ctx.accounts.user_bet)?;
     let player_total_bet = load_mut!(ctx.accounts.player_bet)?;
@@ -371,16 +376,13 @@ pub struct InitGame<'info> {
 pub struct UpdateGameStatus<'info> {
 // in this case payer should be some global admin
     #[account(
-        init,
+        mut,
         seeds = [b"game", game_id.as_ref() , session_id.as_ref()],
         bump,
-        space = Game::SIZE,
-        payer = admin
     )]
     pub game: AccountLoader<'info, Game>,
     #[account(mut)]
     pub admin: Signer<'info>,
-    pub system_program: Program<'info, System>,
 }
 
 
@@ -389,16 +391,13 @@ pub struct UpdateGameStatus<'info> {
 pub struct UpdateGameSettleStatus<'info> {
 // in this case payer should be some global admin
     #[account(
-        init,
+        mut,
         seeds = [b"game", game_id.as_ref() , session_id.as_ref()],
         bump,
-        space = Game::SIZE,
-        payer = admin
     )]
     pub game: AccountLoader<'info, Game>,
     #[account(mut)]
     pub admin: Signer<'info>,
-    pub system_program: Program<'info, System>,
 }
 
 #[derive(Accounts)]

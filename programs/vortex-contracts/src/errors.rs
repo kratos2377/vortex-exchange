@@ -36,7 +36,13 @@ pub enum DexError {
     GameIsStillGoingOn,
 
     #[msg("Game has ended")]
-    GameHasEnded
+    GameHasEnded,
+
+    #[msg("Only Admin can settle bets")]
+    OnlyAdminCanSettleBets,
+
+    #[msg("Only Admin can change game states")]
+    OnlyAdminCanChangeGameStates
 }
 
 #[macro_export]
