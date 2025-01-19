@@ -31,6 +31,12 @@ pub enum DexError {
     InvalidPDA,
     #[msg("Error During Math Computation")]
     MathError,
+
+    #[msg("Game is still going on")]
+    GameIsStillGoingOn,
+
+    #[msg("Game has ended")]
+    GameHasEnded
 }
 
 #[macro_export]

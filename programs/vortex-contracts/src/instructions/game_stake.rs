@@ -38,9 +38,11 @@ pub fn handle_init_game(
     };
 
     let total_lamports_to_be_transferred = (fee as u64 * LAMPORTS_PER_SOL) as u64;
+
+
     let transfer_ix = solana_program::system_instruction::transfer(
         &ctx.accounts.admin.key(),
-        &crate::admin::id(),
+        &ctx.accounts.contract_admin.key(),
         total_lamports_to_be_transferred
     );
 
@@ -48,6 +50,7 @@ pub fn handle_init_game(
         &transfer_ix,
         &[
             ctx.accounts.admin.to_account_info(),
+            ctx.accounts.contract_admin.to_account_info(),
             ctx.accounts.system_program.to_account_info(),
         ],
     )?;
@@ -103,12 +106,17 @@ pub fn handle_init_player_bet(
     // Add logic to add money to so that users can recalim the money they won without paying some transaction fee
 
     let mut game = load_mut!(ctx.accounts.game)?;
+
+    require!(game.is_game_active == true , DexError::GameHasEnded);
+
     let player_total_bet = &mut ctx.accounts.player_total_bet.load_init()?;
     // let clock = Clock::get()?;
     // let now = clock
     //     .unix_timestamp
     //     .cast()
     //     .or(Err(DexError::UnableToCastUnixTime))?;
+
+    validate!(ctx.accounts.admin.lamports() > total_money_staked.ceil() as u64 , DexError::NotEnoughBalance);
 
     game.total_pot += total_money_staked;
 
@@ -128,12 +136,21 @@ pub fn handle_init_player_bet(
 
     
     let total_lamports_to_be_transferred = ( (fee as u64 + total_money_staked.ceil() as u64) * LAMPORTS_PER_SOL) as u64;
-    let _ = &solana_program::system_instruction::transfer(
-        &admin_user_key,
-        &crate::admin::id(),
-        total_lamports_to_be_transferred,
+
+    let transfer_ix = solana_program::system_instruction::transfer(
+        &ctx.accounts.admin.key(),
+        &ctx.accounts.contract_admin.key(),
+        total_lamports_to_be_transferred
     );
 
+    solana_program::program::invoke(
+        &transfer_ix,
+        &[
+            ctx.accounts.admin.to_account_info(),
+            ctx.accounts.contract_admin.to_account_info(),
+            ctx.accounts.system_program.to_account_info(),
+        ],
+    )?;
 
     Ok(())
 
@@ -151,9 +168,12 @@ pub fn handle_user_bet(
     let user_bet_account_model = load_mut!(ctx.accounts.user_bet)?;
     let user_bet_wallet_key = ctx.accounts.user_bet_wallet_key.key();
     let mut game = load_mut!(ctx.accounts.game)?;
+
+    require!(game.is_game_active == true , DexError::GameHasEnded);
+
     let mut player_bet = load_mut!(ctx.accounts.player_total_bet)?;
 
-    validate!(user_bet_account_model.game_id == game_id, DexError::AlreadyMadeABetOnGame );
+    validate!(user_bet_account_model.session_id == session_id, DexError::AlreadyMadeABetOnGame );
 
     let user_bet = &mut ctx.accounts.user_bet.load_init()?;
     // let clock = Clock::get()?;
@@ -175,6 +195,7 @@ pub fn handle_user_bet(
     };
 
 
+    validate!(ctx.accounts.user_bet_wallet_key.lamports() > money_staked.ceil() as u64 , DexError::NotEnoughBalance);
     let total_money_staked_u128 = money_staked as u128;
 
     let fee = total_money_staked_u128
@@ -183,11 +204,22 @@ pub fn handle_user_bet(
 
     
     let total_lamports_to_be_transferred = ((fee as u64 + money_staked.ceil() as u64) * LAMPORTS_PER_SOL) as u64;
-    let _ = &solana_program::system_instruction::transfer(
-        &user_bet_wallet_key.key(),
-        &crate::admin::id(),
-        total_lamports_to_be_transferred,
+
+    let transfer_ix = solana_program::system_instruction::transfer(
+        &ctx.accounts.user_bet_wallet_key.key(),
+        &ctx.accounts.contract_admin.key(),
+        total_lamports_to_be_transferred
     );
+
+    solana_program::program::invoke(
+        &transfer_ix,
+        &[
+            ctx.accounts.user_bet_wallet_key.to_account_info(),
+            ctx.accounts.contract_admin.to_account_info(),
+            ctx.accounts.system_program.to_account_info(),
+        ],
+    )?;
+
 
 
 
@@ -205,8 +237,13 @@ pub fn handle_update_bet(
     let mut user_bet = load_mut!(ctx.accounts.user_bet)?;
     let mut player_total_bet = load_mut!(ctx.accounts.player_total_bet)?;
     let mut game = load_mut!(ctx.accounts.game)?;
+
+    require!(game.is_game_active == true , DexError::GameHasEnded);
+
     let user_bet_wallet_key = ctx.accounts.user_bet_wallet_key.key();
     validate!(user_bet.user_betting_on_id == user_betting_on_id && user_bet.bet_type != bet_type, DexError::UserHasDifferentBetType);
+
+    validate!(ctx.accounts.user_bet_wallet_key.lamports() > money_staked.ceil() as u64 , DexError::NotEnoughBalance);
 
     let total_staked = user_bet.money_staked + money_staked;
     player_total_bet.total_money_staked_on_player += money_staked;
@@ -220,11 +257,22 @@ pub fn handle_update_bet(
     .checked_div(10000 as u128).unwrap(); 
 
     let total_lamports_to_be_transferred = ((fee as u64 + money_staked.ceil() as u64) * LAMPORTS_PER_SOL) as u64;
-    let _ = &solana_program::system_instruction::transfer(
-        &user_bet_wallet_key,
-        &crate::admin::id(),
-        total_lamports_to_be_transferred,
+
+
+    let transfer_ix = solana_program::system_instruction::transfer(
+        &ctx.accounts.user_bet_wallet_key.key(),
+        &ctx.accounts.contract_admin.key(),
+        total_lamports_to_be_transferred
     );
+
+    solana_program::program::invoke(
+        &transfer_ix,
+        &[
+            ctx.accounts.user_bet_wallet_key.to_account_info(),
+            ctx.accounts.contract_admin.to_account_info(),
+            ctx.accounts.system_program.to_account_info(),
+        ],
+    )?;
 
 
     Ok(())
@@ -241,6 +289,9 @@ pub fn handle_settle_all_bets_for_game(
 ) -> Result<()> {
     let user_bet_wallet_key = &ctx.accounts.user_bet_wallet_key.key();
     let game = load_mut!(ctx.accounts.game)?;
+
+    require!(game.is_game_active != true , DexError::GameIsStillGoingOn);
+
     let user_bet = load_mut!(ctx.accounts.user_bet)?;
     let player_total_bet = load_mut!(ctx.accounts.player_bet)?;
 
@@ -253,11 +304,22 @@ pub fn handle_settle_all_bets_for_game(
     );
 
     let total_lamports_to_be_transferred = (money_to_be_rewarded_to_user.floor() as u64 * LAMPORTS_PER_SOL);
-        let _ = &solana_program::system_instruction::transfer(
-            &crate::admin::id(),
-            user_bet_wallet_key,
-            total_lamports_to_be_transferred,
-        );
+
+        
+    let transfer_ix = solana_program::system_instruction::transfer(
+        &ctx.accounts.contract_admin.key(),
+        &ctx.accounts.user_bet_wallet_key.key(),
+        total_lamports_to_be_transferred
+    );
+
+    solana_program::program::invoke(
+        &transfer_ix,
+        &[
+            ctx.accounts.contract_admin.to_account_info(),
+            ctx.accounts.user_bet_wallet_key.to_account_info(),
+            ctx.accounts.system_program.to_account_info(),
+        ],
+    )?;
 
     Ok(())
 }
@@ -276,6 +338,8 @@ pub struct InitGame<'info> {
     pub game: AccountLoader<'info, Game>,
     #[account(mut)]
     pub admin: Signer<'info>,
+    #[account(mut)]
+    pub contract_admin: Signer<'info>,
     pub system_program: Program<'info, System>,
 }
 
@@ -335,6 +399,8 @@ pub struct InitPlayerBet<'info> {
     pub game: AccountLoader<'info, Game>,
     #[account(mut)]
     pub admin: Signer<'info>,
+    #[account(mut)]
+    pub contract_admin: Signer<'info>,
     pub system_program: Program<'info, System>,
 }
 
@@ -364,6 +430,8 @@ pub struct MakeUserGameBet<'info> {
     pub game: AccountLoader<'info, Game>,
     #[account(mut)]
     pub user_bet_wallet_key: Signer<'info>,
+    #[account(mut)]
+    pub contract_admin: Signer<'info>,
     pub system_program: Program<'info, System>,
 }
 
@@ -391,6 +459,9 @@ pub struct UpdateUserGameBet<'info> {
     )]
     pub player_total_bet: AccountLoader<'info, PlayerTotalBet>, 
     pub user_bet_wallet_key: Signer<'info>,
+    #[account(mut)]
+    pub contract_admin: Signer<'info>,
+    pub system_program: Program<'info, System>,
 }
 
 
@@ -417,4 +488,7 @@ pub struct SettleAllBetsForGame<'info> {
     )]
     pub player_bet: AccountLoader<'info, PlayerTotalBet>,
     pub user_bet_wallet_key: Signer<'info>,
+    #[account(mut)]
+    pub contract_admin: Signer<'info>,
+    pub system_program: Program<'info, System>,
 }
