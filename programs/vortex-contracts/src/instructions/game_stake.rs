@@ -181,16 +181,12 @@ pub fn handle_user_bet(
     session_id: [u8;21],
     money_staked: f64,
 ) -> Result<()> {
-    let user_bet_account_model = load_mut!(ctx.accounts.user_bet)?;
     let user_bet_wallet_key = ctx.accounts.user_bet_wallet_key.key();
     let mut game = load_mut!(ctx.accounts.game)?;
 
     require!(game.is_game_active == true , DexError::GameHasEnded);
 
     
-    validate!(user_bet_account_model.session_id == session_id, DexError::AlreadyMadeABetOnGame );
-
-
     let total_money_staked_u128 = money_staked as u128;
 
     let fee = total_money_staked_u128
@@ -313,7 +309,6 @@ pub fn handle_settle_all_bets_for_game(
     session_id: [u8;21],
     winner_id: [u8;16]
 ) -> Result<()> {
-    let user_bet_wallet_key = &ctx.accounts.user_bet_wallet_key.key();
     let game = load_mut!(ctx.accounts.game)?;
 
     require!(game.is_game_active != true , DexError::GameIsStillGoingOn);
@@ -333,16 +328,16 @@ pub fn handle_settle_all_bets_for_game(
 
         
     let transfer_ix = solana_program::system_instruction::transfer(
-        &ctx.accounts.contract_admin.key(),
-        &ctx.accounts.user_bet_wallet_key.key(),
+        &ctx.accounts.admin.key(),
+        &ctx.accounts.to.key(),
         total_lamports_to_be_transferred
     );
 
     solana_program::program::invoke(
         &transfer_ix,
         &[
-            ctx.accounts.contract_admin.to_account_info(),
-            ctx.accounts.user_bet_wallet_key.to_account_info(),
+            ctx.accounts.admin.to_account_info(),
+            ctx.accounts.to.to_account_info(),
             ctx.accounts.system_program.to_account_info(),
         ],
     )?;
@@ -508,7 +503,7 @@ pub struct SettleAllBetsForGame<'info> {
 
     #[account(
         mut,
-        seeds = [b"user_game_bet", game_id.as_ref(), user_betting_on_id.as_ref(), user_bet_wallet_key.key.as_ref() , session_id.as_ref()],
+        seeds = [b"user_game_bet", game_id.as_ref(), user_betting_on_id.as_ref(), to.key.as_ref() , session_id.as_ref()],
         bump
     )]
     pub user_bet: AccountLoader<'info, UserGameBet>,
@@ -524,9 +519,9 @@ pub struct SettleAllBetsForGame<'info> {
         bump
     )]
     pub player_bet: AccountLoader<'info, PlayerTotalBet>,
-    pub user_bet_wallet_key: Signer<'info>,
+    pub admin: Signer<'info>,
     #[account(mut)]
     /// CHECK:` doc comment explaining why no checks through types are necessary.
-    pub contract_admin: AccountInfo<'info>,
+    pub to: AccountInfo<'info>,
     pub system_program: Program<'info, System>,
 }
