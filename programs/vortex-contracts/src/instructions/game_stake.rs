@@ -1,12 +1,13 @@
 use anchor_lang::prelude::*;
 use num_traits::ToBytes;
 use solana_program::native_token::LAMPORTS_PER_SOL;
-use crate::{controllers, errors::DexError,  load_mut, state::game_stake::{BetType, Game, PlayerTotalBet, UserGameBet}, validate};
+use anchor_spl::token_interface::{Mint, TokenAccount, TokenInterface};
+use crate::{controllers, errors::DexError, load_mut, state::game_stake::{BetType, Game, PlayerTotalBet, UserGameBet}, utils::token::{self, get_token_mint}, validate};
 
 
 
-pub fn handle_init_game(
-    ctx: Context<InitGame>,
+pub fn handle_init_game<'c: 'info, 'info>(
+    ctx: Context<'_ , '_ , 'c , 'info , InitGame<'info>>,
     game_id: [u8; 16],
     session_id: [u8;21],
     total_money_staked: f64
@@ -21,6 +22,9 @@ pub fn handle_init_game(
     //     .unix_timestamp
     //     .cast()
     //     .or(Err(DexError::UnableToCastUnixTime))?;
+
+    let remaining_accounts_iter = &mut ctx.remaining_accounts.iter().peekable();
+    let mint = get_token_mint(remaining_accounts_iter)?;
 
     let total_money_staked_u128 = 1 as u128;
 
@@ -39,30 +43,25 @@ pub fn handle_init_game(
 
     let total_lamports_to_be_transferred = (fee as u64 * LAMPORTS_PER_SOL) as u64;
 
-
-    let transfer_ix = solana_program::system_instruction::transfer(
-        &ctx.accounts.admin.key(),
-        &ctx.accounts.contract_admin.key(),
-        total_lamports_to_be_transferred
+    token::receive(
+        &ctx.accounts.token_program,
+        &ctx.accounts.user_token_account,
+        &ctx.accounts.game_vault,
+        &ctx.accounts.admin,
+        total_lamports_to_be_transferred,
+        &mint,
     );
 
-    solana_program::program::invoke(
-        &transfer_ix,
-        &[
-            ctx.accounts.admin.to_account_info(),
-            ctx.accounts.contract_admin.to_account_info(),
-            ctx.accounts.system_program.to_account_info(),
-        ],
-    )?;
 
+    
     Ok(())
 
 }
 
 
 
-pub fn handle_update_game_status(
-    ctx: Context<UpdateGameStatus>,
+pub fn handle_update_game_status<'c: 'info, 'info>(
+    ctx: Context<'_ , '_ , 'c , 'info ,UpdateGameStatus<'info>>,
     game_id: [u8; 16],
     session_id: [u8;21]
 ) -> Result<()> {
@@ -81,8 +80,8 @@ pub fn handle_update_game_status(
 }
 
 
-pub fn handle_update_game_is_settled_status(
-    ctx: Context<UpdateGameSettleStatus>,
+pub fn handle_update_game_is_settled_status<'c: 'info, 'info>(
+    ctx: Context<'_ , '_ , 'c , 'info ,UpdateGameSettleStatus<'info>>,
     game_id: [u8; 16],
     session_id: [u8;21]
 ) -> Result<()> {
@@ -97,8 +96,8 @@ pub fn handle_update_game_is_settled_status(
 }
 
 
-pub fn handle_init_player_bet(
-    ctx: Context<InitPlayerBet>,
+pub fn handle_init_player_bet<'c: 'info, 'info>(
+    ctx: Context<'_ , '_ , 'c , 'info , InitPlayerBet<'info>>,
     game_id: [u8; 16],
     user_betting_on_id: [u8;16],
     session_id: [u8;21],
@@ -135,6 +134,8 @@ pub fn handle_init_player_bet(
     //     .or(Err(DexError::UnableToCastUnixTime))?;
 
 
+    let remaining_accounts_iter = &mut ctx.remaining_accounts.iter().peekable();
+    let mint = get_token_mint(remaining_accounts_iter)?;
 
 
 
@@ -158,28 +159,26 @@ pub fn handle_init_player_bet(
     
     let total_lamports_to_be_transferred = ( (fee as u64 + total_money_staked as u64) * LAMPORTS_PER_SOL) as u64;
 
-    let transfer_ix = solana_program::system_instruction::transfer(
-        &ctx.accounts.admin.key(),
-        &ctx.accounts.contract_admin.key(),
-        total_lamports_to_be_transferred
+
+    
+    token::receive(
+        &ctx.accounts.token_program,
+        &ctx.accounts.user_token_account,
+        &ctx.accounts.game_vault,
+        &ctx.accounts.admin,
+        total_lamports_to_be_transferred,
+        &mint,
     );
 
-    solana_program::program::invoke(
-        &transfer_ix,
-        &[
-            ctx.accounts.admin.to_account_info(),
-            ctx.accounts.contract_admin.to_account_info(),
-            ctx.accounts.system_program.to_account_info(),
-        ],
-    )?;
+
 
     Ok(())
 
 }
 
 
-pub fn handle_user_bet(
-    ctx: Context<MakeUserGameBet>,
+pub fn handle_user_bet<'c: 'info, 'info>(
+    ctx: Context<'_ , '_ , 'c , 'info , MakeUserGameBet<'info>>,
     game_id: [u8; 16],
     user_betting_on_id: [u8;16],
     session_id: [u8;21],
@@ -199,6 +198,11 @@ pub fn handle_user_bet(
 
 
     validate!(ctx.accounts.user_bet_wallet_key.lamports() > money_staked as u64 + fee as u64 , DexError::NotEnoughBalance);
+
+    let remaining_accounts_iter = &mut ctx.remaining_accounts.iter().peekable();
+    let mint = get_token_mint(remaining_accounts_iter)?;
+
+
 
 
     let mut player_bet = load_mut!(ctx.accounts.player_total_bet)?;
@@ -229,29 +233,23 @@ pub fn handle_user_bet(
     
     let total_lamports_to_be_transferred = ((fee as u64 + money_staked as u64) * LAMPORTS_PER_SOL) as u64;
 
-    let transfer_ix = solana_program::system_instruction::transfer(
-        &ctx.accounts.user_bet_wallet_key.key(),
-        &ctx.accounts.contract_admin.key(),
-        total_lamports_to_be_transferred
+
+    token::receive(
+        &ctx.accounts.token_program,
+        &ctx.accounts.user_token_account,
+        &ctx.accounts.game_vault,
+        &ctx.accounts.user_bet_wallet_key,
+        total_lamports_to_be_transferred,
+        &mint,
     );
-
-    solana_program::program::invoke(
-        &transfer_ix,
-        &[
-            ctx.accounts.user_bet_wallet_key.to_account_info(),
-            ctx.accounts.contract_admin.to_account_info(),
-            ctx.accounts.system_program.to_account_info(),
-        ],
-    )?;
-
 
 
 
     Ok(())
 }
 
-pub fn handle_update_bet(
-    ctx: Context<UpdateUserGameBet>,
+pub fn handle_update_bet<'c: 'info, 'info>(
+    ctx: Context<'_ , '_ , 'c , 'info , UpdateUserGameBet<'info>>,
     game_id: [u8;16],
     user_betting_on_id: [u8;16],
     session_id: [u8;21],
@@ -276,6 +274,10 @@ pub fn handle_update_bet(
 
     validate!(ctx.accounts.user_bet_wallet_key.lamports() > money_staked as u64 + fee as u64 , DexError::NotEnoughBalance);
 
+    let remaining_accounts_iter = &mut ctx.remaining_accounts.iter().peekable();
+    let mint = get_token_mint(remaining_accounts_iter)?;
+
+
 
     let total_staked = user_bet.money_staked + money_staked;
     player_total_bet.total_money_staked_on_player += money_staked;
@@ -285,29 +287,21 @@ pub fn handle_update_bet(
 
     let total_lamports_to_be_transferred = ((fee as u64 + money_staked as u64) * LAMPORTS_PER_SOL) as u64;
 
-
-    let transfer_ix = solana_program::system_instruction::transfer(
-        &ctx.accounts.user_bet_wallet_key.key(),
-        &ctx.accounts.contract_admin.key(),
-        total_lamports_to_be_transferred
+    token::receive(
+        &ctx.accounts.token_program,
+        &ctx.accounts.user_token_account,
+        &ctx.accounts.game_vault,
+        &ctx.accounts.user_bet_wallet_key,
+        total_lamports_to_be_transferred,
+        &mint,
     );
-
-    solana_program::program::invoke(
-        &transfer_ix,
-        &[
-            ctx.accounts.user_bet_wallet_key.to_account_info(),
-            ctx.accounts.contract_admin.to_account_info(),
-            ctx.accounts.system_program.to_account_info(),
-        ],
-    )?;
-
 
     Ok(())
 }
 
 
-pub fn handle_settle_all_bets_for_game(
-    ctx: Context<SettleAllBetsForGame>,
+pub fn handle_settle_all_bets_for_game<'c: 'info, 'info>(
+    ctx: Context<'_ , '_ , 'c , 'info , SettleAllBetsForGame<'info>>,
     game_id: [u8;16],
     user_betting_on_id: [u8;16],
     session_id: [u8;21],
@@ -316,12 +310,16 @@ pub fn handle_settle_all_bets_for_game(
     let game = load_mut!(ctx.accounts.game)?;
 
     require!(game.is_game_active != true , DexError::GameIsStillGoingOn);
-    validate!(ctx.accounts.admin.key() == crate::admin::id() , DexError::OnlyAdminCanSettleBets);
 
     let user_bet = load_mut!(ctx.accounts.user_bet)?;
     let player_total_bet = load_mut!(ctx.accounts.player_bet)?;
 
     validate!(winner_id != user_bet.user_betting_on_id, DexError::UserLostTheBet);
+
+
+    let remaining_accounts_iter = &mut ctx.remaining_accounts.iter().peekable();
+    let mint = get_token_mint(remaining_accounts_iter)?;
+
 
     let money_to_be_rewarded_to_user = controllers::game_stake::calculate_winner_and_bettor_rewards(
         user_bet.money_staked,
@@ -331,21 +329,14 @@ pub fn handle_settle_all_bets_for_game(
 
     let total_lamports_to_be_transferred = (money_to_be_rewarded_to_user as u64 * LAMPORTS_PER_SOL);
 
-        
-    let transfer_ix = solana_program::system_instruction::transfer(
-        &ctx.accounts.admin.key(),
-        &ctx.accounts.to.key(),
-        total_lamports_to_be_transferred
+    token::receive(
+        &ctx.accounts.token_program,
+        &ctx.accounts.game_vault,
+        &ctx.accounts.game_vault,
+        &ctx.accounts.vortex_signer,
+        total_lamports_to_be_transferred,
+        &mint,
     );
-
-    solana_program::program::invoke(
-        &transfer_ix,
-        &[
-            ctx.accounts.admin.to_account_info(),
-            ctx.accounts.to.to_account_info(),
-            ctx.accounts.system_program.to_account_info(),
-        ],
-    )?;
 
     Ok(())
 }
@@ -362,12 +353,31 @@ pub struct InitGame<'info> {
         payer = admin
     )]
     pub game: AccountLoader<'info, Game>,
+    pub game_mint: Box<InterfaceAccount<'info, Mint>>,
+    #[account(
+        init,
+        seeds = [b"game_vault", game_id.as_ref() , session_id.as_ref()],
+        bump,
+        payer = admin,
+        token::mint = game_mint,
+        token::authority = vortex_signer
+    )]
+    pub game_vault: Box<InterfaceAccount<'info, TokenAccount>>,
+    #[account(
+        mut,
+        constraint = &game_vault.mint.eq(&user_token_account.mint),
+        token::authority = admin
+    )]
+    pub user_token_account: Box<InterfaceAccount<'info, TokenAccount>>,
     #[account(mut)]
     pub admin: Signer<'info>,
-    #[account(mut)]
-    /// CHECK:` doc comment explaining why no checks through types are necessary.
-    pub contract_admin: AccountInfo<'info>,
+
+    #[account()]
+    /// CHECK: program signer
+    pub vortex_signer: AccountInfo<'info>,
+    pub rent: Sysvar<'info, Rent>,
     pub system_program: Program<'info, System>,
+    pub token_program: Interface<'info, TokenInterface>,
 }
 
 
@@ -425,12 +435,23 @@ pub struct InitPlayerBet<'info> {
         bump,
     )]
     pub game: AccountLoader<'info, Game>,
+    #[account(
+        mut,
+        seeds = [b"game_vault", game_id.as_ref() , session_id.as_ref()],
+        bump,
+    )]
+    pub game_vault: Box<InterfaceAccount<'info, TokenAccount>>,
+    #[account(
+        mut,
+        constraint = &game_vault.mint.eq(&user_token_account.mint),
+        token::authority = admin
+    )]
+    pub user_token_account: Box<InterfaceAccount<'info, TokenAccount>>,
     #[account(mut)]
     pub admin: Signer<'info>,
-    #[account(mut)]
-    /// CHECK:` doc comment explaining why no checks through types are necessary.
-    pub contract_admin: AccountInfo<'info>,
+    pub rent: Sysvar<'info, Rent>,
     pub system_program: Program<'info, System>,
+    pub token_program: Interface<'info, TokenInterface>,
 }
 
 
@@ -457,12 +478,23 @@ pub struct MakeUserGameBet<'info> {
         bump
     )]
     pub game: AccountLoader<'info, Game>,
+    #[account(
+        mut,
+        seeds = [b"game_vault", game_id.as_ref() , session_id.as_ref()],
+        bump,
+    )]
+    pub game_vault: Box<InterfaceAccount<'info, TokenAccount>>,
+    #[account(
+        mut,
+        constraint = &game_vault.mint.eq(&user_token_account.mint),
+        token::authority = user_bet_wallet_key
+    )]
+    pub user_token_account: Box<InterfaceAccount<'info, TokenAccount>>,
     #[account(mut)]
     pub user_bet_wallet_key: Signer<'info>,
-    #[account(mut)]
-    /// CHECK:` doc comment explaining why no checks through types are necessary.
-    pub contract_admin: AccountInfo<'info>,
+    pub rent: Sysvar<'info, Rent>,
     pub system_program: Program<'info, System>,
+    pub token_program: Interface<'info, TokenInterface>,
 }
 
 
@@ -488,11 +520,22 @@ pub struct UpdateUserGameBet<'info> {
         bump
     )]
     pub player_total_bet: AccountLoader<'info, PlayerTotalBet>, 
-    pub user_bet_wallet_key: Signer<'info>,
+    #[account(
+        mut,
+        seeds = [b"game_vault", game_id.as_ref() , session_id.as_ref()],
+        bump,
+    )]
+    pub game_vault: Box<InterfaceAccount<'info, TokenAccount>>,
+    #[account(
+        mut,
+        constraint = &game_vault.mint.eq(&user_token_account.mint),
+        token::authority = user_bet_wallet_key
+    )]
+    pub user_token_account: Box<InterfaceAccount<'info, TokenAccount>>,
     #[account(mut)]
-    /// CHECK:` doc comment explaining why no checks through types are necessary.
-    pub contract_admin: AccountInfo<'info>,
+    pub user_bet_wallet_key: Signer<'info>,
     pub system_program: Program<'info, System>,
+    pub token_program: Interface<'info, TokenInterface>,
 }
 
 
@@ -502,7 +545,7 @@ pub struct SettleAllBetsForGame<'info> {
 
     #[account(
         mut,
-        seeds = [b"user_game_bet", game_id.as_ref(), user_betting_on_id.as_ref(), to.key.as_ref() , session_id.as_ref()],
+        seeds = [b"user_game_bet", game_id.as_ref(), user_betting_on_id.as_ref(), to.key().as_ref() , session_id.as_ref()],
         bump
     )]
     pub user_bet: AccountLoader<'info, UserGameBet>,
@@ -518,9 +561,19 @@ pub struct SettleAllBetsForGame<'info> {
         bump
     )]
     pub player_bet: AccountLoader<'info, PlayerTotalBet>,
-    pub admin: Signer<'info>,
+    #[account(
+        mut,
+        seeds = [b"game_vault", game_id.as_ref() , session_id.as_ref()],
+        bump,
+        token::authority = vortex_signer
+    )]
+    pub game_vault: Box<InterfaceAccount<'info, TokenAccount>>,
     #[account(mut)]
-    /// CHECK:` doc comment explaining why no checks through types are necessary.
+    /// CHECK: Account in which we will transfer the amount
     pub to: AccountInfo<'info>,
+    #[account()]
+    /// CHECK: program signer
+    pub vortex_signer: AccountInfo<'info>,
     pub system_program: Program<'info, System>,
+    pub token_program: Interface<'info, TokenInterface>,
 }

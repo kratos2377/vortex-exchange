@@ -42,7 +42,10 @@ pub enum DexError {
     OnlyAdminCanSettleBets,
 
     #[msg("Only Admin can change game states")]
-    OnlyAdminCanChangeGameStates
+    OnlyAdminCanChangeGameStates,
+
+    #[msg("Non zero transfer fee")]
+    NonZeroTransferFee,
 }
 
 #[macro_export]

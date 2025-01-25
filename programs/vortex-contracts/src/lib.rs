@@ -35,8 +35,8 @@ pub mod vortex_contracts {
     use super::*;
 
     // Methods to stake in game
-    pub fn initialize_game(
-        ctx: Context<InitGame>,
+    pub fn initialize_game<'c: 'info, 'info>(
+        ctx: Context<'_, '_, 'c, 'info, InitGame<'info>>,
         game_id: [u8; 16],
         session_id: [u8;21],
         total_money_staked: f64,
@@ -45,8 +45,8 @@ pub mod vortex_contracts {
     }
 
 
-    pub fn update_game_status(
-        ctx: Context<UpdateGameStatus>,
+    pub fn update_game_status<'c: 'info, 'info>(
+        ctx: Context<'_, '_, 'c, 'info, UpdateGameStatus<'info>>,
         game_id: [u8; 16],
         session_id: [u8;21]
     ) -> Result<()> {
@@ -54,8 +54,8 @@ pub mod vortex_contracts {
     }
 
 
-    pub fn update_game_is_settled_status(
-        ctx: Context<UpdateGameSettleStatus>,
+    pub fn update_game_is_settled_status<'c: 'info, 'info>(
+        ctx: Context<'_, '_, 'c, 'info, UpdateGameSettleStatus<'info>>,
         game_id: [u8; 16],
         session_id: [u8;21]
     ) -> Result<()> {
@@ -64,8 +64,8 @@ pub mod vortex_contracts {
 
 
 
-    pub fn initialize_player_bet(
-        ctx: Context<InitPlayerBet>,
+    pub fn initialize_player_bet<'c: 'info, 'info>(
+        ctx: Context<'_, '_, 'c, 'info, InitPlayerBet<'info>>,
         game_id: [u8; 16],
         user_betting_on_id: [u8;16],
         session_id: [u8;21],
@@ -77,8 +77,8 @@ pub mod vortex_contracts {
 
 
     
-    pub fn user_bet(
-        ctx: Context<MakeUserGameBet>,
+    pub fn user_bet<'c: 'info, 'info>(
+        ctx: Context<'_, '_, 'c, 'info, MakeUserGameBet<'info>>,
         game_id: [u8; 16],
         user_betting_on_id: [u8;16],
         session_id: [u8;21],
@@ -89,8 +89,8 @@ pub mod vortex_contracts {
 
 
         
-    pub fn update_user_bet(
-        ctx: Context<UpdateUserGameBet>,
+    pub fn update_user_bet<'c: 'info, 'info>(
+        ctx: Context<'_, '_, 'c, 'info, UpdateUserGameBet<'info>>,
         game_id: [u8;16],
         user_betting_on_id: [u8;16],
         session_id: [u8;21],
@@ -103,8 +103,8 @@ pub mod vortex_contracts {
 
     //THis will be done by executors
 
-    pub fn settle_all_bets(
-        ctx: Context<SettleAllBetsForGame>,
+    pub fn settle_all_bets<'c: 'info, 'info>(
+        ctx: Context<'_, '_, 'c, 'info, SettleAllBetsForGame<'info>>,
         game_id: [u8;16],
         user_betting_on_id: [u8;16],
         session_id: [u8;21],
