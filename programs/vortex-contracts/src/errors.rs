@@ -44,6 +44,9 @@ pub enum DexError {
     #[msg("Only Admin can change game states")]
     OnlyAdminCanChangeGameStates,
 
+    #[msg("Only Admin can initialize")]
+    OnlyAdminCanInitialize,
+
     #[msg("Non zero transfer fee")]
     NonZeroTransferFee,
 }

@@ -2,6 +2,21 @@ use anchor_lang::prelude::*;
 use borsh::{BorshDeserialize, BorshSerialize};
 
 
+
+#[account(zero_copy(unsafe))]
+#[derive(Default)]
+#[repr(C)]
+pub struct VortexState {
+    pub admin: Pubkey,
+    pub signer: Pubkey,
+    pub signer_nonce: u8,
+}
+
+
+impl VortexState {
+    pub const SIZE: usize = 8 + 32 + 32 + 1 + 8;
+}
+
 #[account(zero_copy(unsafe))]
 #[derive(PartialEq, Debug)]
 #[repr(C)]

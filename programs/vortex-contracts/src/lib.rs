@@ -35,6 +35,11 @@ pub mod vortex_contracts {
     use super::*;
 
     // Methods to stake in game
+
+    pub fn initialize(ctx: Context<Initialize>) -> Result<()> {
+        handle_initialize(ctx)
+    }
+
     pub fn initialize_game<'c: 'info, 'info>(
         ctx: Context<'_, '_, 'c, 'info, InitGame<'info>>,
         game_id: [u8; 16],

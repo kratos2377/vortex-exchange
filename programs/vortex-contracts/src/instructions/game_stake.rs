@@ -2,8 +2,26 @@ use anchor_lang::prelude::*;
 use num_traits::ToBytes;
 use solana_program::native_token::LAMPORTS_PER_SOL;
 use anchor_spl::token_interface::{Mint, TokenAccount, TokenInterface};
-use crate::{controllers, errors::DexError, load_mut, state::game_stake::{BetType, Game, PlayerTotalBet, UserGameBet}, utils::token::{self, get_token_mint}, validate};
+use crate::{controllers, errors::DexError, load_mut, state::game_stake::{BetType, Game, PlayerTotalBet, UserGameBet}, utils::token::{self, get_token_mint}, validate, VortexState};
 
+
+
+pub fn handle_initialize(
+    ctx: Context<Initialize>
+) -> Result<()> {
+    validate!(ctx.accounts.admin.key == &crate::admin::id() , DexError::OnlyAdminCanChangeGameStates);
+    let (vortex_signer, vortex_signer_nonce) =
+    Pubkey::find_program_address(&[b"vortex_signer".as_ref()], ctx.program_id);
+
+    let state = &mut ctx.accounts.state.load_init()?;
+    **state = VortexState{
+        admin: *ctx.accounts.admin.key,
+        signer: vortex_signer,
+        signer_nonce: vortex_signer_nonce,
+    };
+
+    Ok(())
+}
 
 
 pub fn handle_init_game<'c: 'info, 'info>(
@@ -68,7 +86,6 @@ pub fn handle_update_game_status<'c: 'info, 'info>(
 ) -> Result<()> {
 
 
-    validate!(ctx.accounts.admin.key() == crate::admin::id() , DexError::OnlyAdminCanChangeGameStates);
 
     let mut game = load_mut!(ctx.accounts.game)?;
 
@@ -87,7 +104,6 @@ pub fn handle_update_game_is_settled_status<'c: 'info, 'info>(
     session_id: [u8;21]
 ) -> Result<()> {
 
-    validate!(ctx.accounts.admin.key() == crate::admin::id() , DexError::OnlyAdminCanChangeGameStates);
     let mut game = load_mut!(ctx.accounts.game)?;
 
     game.is_settled = true;
@@ -341,6 +357,28 @@ pub fn handle_settle_all_bets_for_game<'c: 'info, 'info>(
 
     Ok(())
 }
+
+
+#[derive(Accounts)]
+pub struct Initialize<'info> {
+    #[account(mut)]
+    pub admin: Signer<'info>,
+    #[account(
+        init,
+        seeds = [b"vortex_state".as_ref()],
+        space = VortexState::SIZE,
+        bump,
+        payer = admin
+    )]
+    pub state: AccountLoader<'info, VortexState>,
+    pub quote_asset_mint: Box<InterfaceAccount<'info, Mint>>,
+    /// CHECK: checked in `initialize`
+    pub vortex_signer: AccountInfo<'info>,
+    pub rent: Sysvar<'info, Rent>,
+    pub system_program: Program<'info, System>,
+    pub token_program: Interface<'info, TokenInterface>,
+}
+
 
 #[derive(Accounts)]
 #[instruction(game_id: [u8;16] , session_id: [u8;21])]
