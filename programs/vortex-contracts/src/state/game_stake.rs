@@ -10,12 +10,13 @@ pub struct Game {
     pub pubkey: Pubkey,
     pub total_pot: f64,
     pub is_game_active: bool,
+    pub game_vault_key: Pubkey,
     pub is_settled: bool,
     pub session_id: [u8;21]
 }
 
 impl Game {
-    pub const SIZE: usize = 8 + 16 + 32 + 8  + 1  + 1 + 21 + 8;
+    pub const SIZE: usize = 8 + 16 + 32 + 8  + 1  + 1 + 21 + 8 + 32;
 }
 
 #[account(zero_copy(unsafe))]

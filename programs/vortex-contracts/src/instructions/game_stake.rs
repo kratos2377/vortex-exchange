@@ -38,8 +38,9 @@ pub fn handle_init_game<'c: 'info, 'info>(
         total_pot: total_money_staked as f64,
         is_game_active: true,
         is_settled: false,
-        session_id: session_id
-    };
+        session_id: session_id,
+        game_vault_key: *ctx.accounts.game_vault.to_account_info().key
+       };
 
     let total_lamports_to_be_transferred = (fee as u64 * LAMPORTS_PER_SOL) as u64;
 
