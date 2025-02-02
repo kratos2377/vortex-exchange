@@ -57,12 +57,13 @@ impl UserGameBet {
 pub struct PlayerTotalBet {
     pub game_id: [u8;16],
     pub user_betting_on_id: [u8;16],
+    pub player_staked_money: f64,
     pub total_money_staked_on_player: f64,
     pub session_id: [u8;21],
 }
 
 impl PlayerTotalBet {
-    pub const SIZE: usize =  8 + 16 + 16 +  8 + 21 + 8;
+    pub const SIZE: usize =  8 + 16 + 16 + 8 +  8 + 21 + 8;
 }
 
 

@@ -106,8 +106,24 @@ pub mod vortex_contracts {
     }
 
 
+    
+
     //THis will be done by executors
 
+    //fn to settle bets if the game ended abruptly
+    pub fn settle_all_bets_for_invalid_game<'c: 'info, 'info>(
+        ctx: Context<'_, '_, 'c, 'info, SettleAllBetsForInvalidGame<'info>>,
+        game_id: [u8;16],
+        user_betting_on_id: [u8;16],
+        session_id: [u8;21],
+        is_player: bool
+    
+    ) -> Result<()> {
+        handle_settle_all_bets_for_invalid_game(ctx,   game_id, user_betting_on_id, session_id , is_player)
+    }
+
+
+    // fn to settle bets
     pub fn settle_all_bets<'c: 'info, 'info>(
         ctx: Context<'_, '_, 'c, 'info, SettleAllBetsForGame<'info>>,
         game_id: [u8;16],

@@ -161,6 +161,7 @@ pub fn handle_init_player_bet<'c: 'info, 'info>(
         user_betting_on_id,
         total_money_staked_on_player: total_money_staked as f64,
         session_id: session_id,
+        player_staked_money: total_money_staked,
     };
 
     **user_game_bet = UserGameBet{
@@ -309,6 +310,48 @@ pub fn handle_update_bet<'c: 'info, 'info>(
         &ctx.accounts.user_token_account,
         &ctx.accounts.game_vault,
         &ctx.accounts.user_bet_wallet_key,
+        total_lamports_to_be_transferred,
+        &mint,
+    );
+
+    Ok(())
+}
+
+
+
+pub fn handle_settle_all_bets_for_invalid_game<'c: 'info, 'info>(
+    ctx: Context<'_ , '_ , 'c , 'info , SettleAllBetsForInvalidGame<'info>>,
+    game_id: [u8;16],
+    user_betting_on_id: [u8;16],
+    session_id: [u8;21],
+    is_player: bool
+) -> Result<()> {
+    let game = load_mut!(ctx.accounts.game)?;
+
+    require!(game.is_game_active != true , DexError::GameIsStillGoingOn);
+
+    let user_bet = load_mut!(ctx.accounts.user_bet)?;
+    let player_total_bet = load_mut!(ctx.accounts.player_bet)?;
+
+    let remaining_accounts_iter = &mut ctx.remaining_accounts.iter().peekable();
+    let mint = get_token_mint(remaining_accounts_iter)?;
+
+
+    let money_to_be_rewarded_to_user = controllers::game_stake::calculate_bettor_money_for_invalid_game(
+        user_bet.money_staked,
+        player_total_bet.total_money_staked_on_player,
+        player_total_bet.player_staked_money,
+        game.total_pot,
+        is_player
+    );
+
+    let total_lamports_to_be_transferred = (money_to_be_rewarded_to_user as u64 * LAMPORTS_PER_SOL);
+
+    token::receive(
+        &ctx.accounts.token_program,
+        &ctx.accounts.game_vault,
+        &ctx.accounts.game_vault,
+        &ctx.accounts.vortex_signer,
         total_lamports_to_be_transferred,
         &mint,
     );
@@ -573,6 +616,47 @@ pub struct UpdateUserGameBet<'info> {
     pub user_token_account: Box<InterfaceAccount<'info, TokenAccount>>,
     #[account(mut)]
     pub user_bet_wallet_key: Signer<'info>,
+    pub system_program: Program<'info, System>,
+    pub token_program: Interface<'info, TokenInterface>,
+}
+
+
+
+#[derive(Accounts)]
+#[instruction(game_id: [u8;16], user_betting_on_id: [u8;16], session_id: [u8;21])]
+pub struct SettleAllBetsForInvalidGame<'info> {
+
+    #[account(
+        mut,
+        seeds = [b"user_game_bet", game_id.as_ref(), user_betting_on_id.as_ref(), to.key().as_ref() , session_id.as_ref()],
+        bump
+    )]
+    pub user_bet: AccountLoader<'info, UserGameBet>,
+    #[account(
+        mut,
+        seeds = [b"game", game_id.as_ref(), session_id.as_ref()],
+        bump
+    )]
+    pub game: AccountLoader<'info, Game>,
+    #[account(
+        mut,
+        seeds = [b"player_bet", game_id.as_ref(), user_betting_on_id.as_ref(), session_id.as_ref()],
+        bump
+    )]
+    pub player_bet: AccountLoader<'info, PlayerTotalBet>,
+    #[account(
+        mut,
+        seeds = [b"game_vault", game_id.as_ref() , session_id.as_ref()],
+        bump,
+        token::authority = vortex_signer
+    )]
+    pub game_vault: Box<InterfaceAccount<'info, TokenAccount>>,
+    #[account(mut)]
+    /// CHECK: Account in which we will transfer the amount
+    pub to: AccountInfo<'info>,
+    #[account()]
+    /// CHECK: program signer
+    pub vortex_signer: AccountInfo<'info>,
     pub system_program: Program<'info, System>,
     pub token_program: Interface<'info, TokenInterface>,
 }
