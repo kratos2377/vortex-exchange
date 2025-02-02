@@ -79,8 +79,8 @@ pub fn handle_init_game<'c: 'info, 'info>(
 
 
 
-pub fn handle_update_game_status<'c: 'info, 'info>(
-    ctx: Context<'_ , '_ , 'c , 'info ,UpdateGameStatus<'info>>,
+pub fn handle_update_game_status(
+    ctx: Context<UpdateGameStatus>,
     game_id: [u8; 16],
     session_id: [u8;21]
 ) -> Result<()> {
@@ -98,8 +98,8 @@ pub fn handle_update_game_status<'c: 'info, 'info>(
 }
 
 
-pub fn handle_update_game_is_settled_status<'c: 'info, 'info>(
-    ctx: Context<'_ , '_ , 'c , 'info ,UpdateGameSettleStatus<'info>>,
+pub fn handle_update_game_is_settled_status(
+    ctx: Context<UpdateGameSettleStatus>,
     game_id: [u8; 16],
     session_id: [u8;21]
 ) -> Result<()> {
@@ -333,6 +333,9 @@ pub fn handle_settle_all_bets_for_invalid_game<'c: 'info, 'info>(
     let user_bet = load_mut!(ctx.accounts.user_bet)?;
     let player_total_bet = load_mut!(ctx.accounts.player_bet)?;
 
+
+
+    let vortex_state = &ctx.accounts.vortex_state.load()?;
     let remaining_accounts_iter = &mut ctx.remaining_accounts.iter().peekable();
     let mint = get_token_mint(remaining_accounts_iter)?;
 
@@ -347,11 +350,13 @@ pub fn handle_settle_all_bets_for_invalid_game<'c: 'info, 'info>(
 
     let total_lamports_to_be_transferred = (money_to_be_rewarded_to_user as u64 * LAMPORTS_PER_SOL);
 
-    token::receive(
+
+    token::send_from_program_vault(
         &ctx.accounts.token_program,
         &ctx.accounts.game_vault,
         &ctx.accounts.game_vault,
         &ctx.accounts.vortex_signer,
+        vortex_state.signer_nonce,
         total_lamports_to_be_transferred,
         &mint,
     );
@@ -376,7 +381,7 @@ pub fn handle_settle_all_bets_for_game<'c: 'info, 'info>(
 
     validate!(winner_id != user_bet.user_betting_on_id, DexError::UserLostTheBet);
 
-
+    let vortex_state = &ctx.accounts.vortex_state.load()?;
     let remaining_accounts_iter = &mut ctx.remaining_accounts.iter().peekable();
     let mint = get_token_mint(remaining_accounts_iter)?;
 
@@ -389,11 +394,12 @@ pub fn handle_settle_all_bets_for_game<'c: 'info, 'info>(
 
     let total_lamports_to_be_transferred = (money_to_be_rewarded_to_user as u64 * LAMPORTS_PER_SOL);
 
-    token::receive(
+    token::send_from_program_vault(
         &ctx.accounts.token_program,
         &ctx.accounts.game_vault,
         &ctx.accounts.game_vault,
         &ctx.accounts.vortex_signer,
+        vortex_state.signer_nonce,
         total_lamports_to_be_transferred,
         &mint,
     );
@@ -651,6 +657,11 @@ pub struct SettleAllBetsForInvalidGame<'info> {
         token::authority = vortex_signer
     )]
     pub game_vault: Box<InterfaceAccount<'info, TokenAccount>>,
+    #[account(
+        seeds = [b"vortex_state"],
+        bump,
+    )]
+    pub vortex_state: AccountLoader<'info, VortexState>,
     #[account(mut)]
     /// CHECK: Account in which we will transfer the amount
     pub to: AccountInfo<'info>,
@@ -691,6 +702,11 @@ pub struct SettleAllBetsForGame<'info> {
         token::authority = vortex_signer
     )]
     pub game_vault: Box<InterfaceAccount<'info, TokenAccount>>,
+    #[account(
+        seeds = [b"vortex_state"],
+        bump,
+    )]
+    pub vortex_state: AccountLoader<'info, VortexState>,
     #[account(mut)]
     /// CHECK: Account in which we will transfer the amount
     pub to: AccountInfo<'info>,

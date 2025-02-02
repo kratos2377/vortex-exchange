@@ -16,7 +16,7 @@ use std::slice::Iter;
 
 
 pub fn get_signer_seeds(nonce: &u8) -> [&[u8]; 2] {
-    [b"vortex".as_ref(), bytemuck::bytes_of(nonce)]
+    [b"vortex_signer".as_ref(), bytemuck::bytes_of(nonce)]
 }
 
 

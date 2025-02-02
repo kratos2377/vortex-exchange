@@ -14,9 +14,9 @@ use crate::instructions::game_stake::*;
 
 
 #[cfg(feature = "devnet")]
-declare_id!("Crwey2gNbxUAh9W4XPP4PMA9w2UZTg3BmikEFyvHzuuW");
+declare_id!("GnspmmmW55UpjzwUySUvNGEnTSJMyJbkieSqPXFeUdYD");
 #[cfg(not(feature = "devnet"))]
-declare_id!("Crwey2gNbxUAh9W4XPP4PMA9w2UZTg3BmikEFyvHzuuW");
+declare_id!("GnspmmmW55UpjzwUySUvNGEnTSJMyJbkieSqPXFeUdYD");
 
 
 pub mod admin {
@@ -50,8 +50,8 @@ pub mod vortex_contracts {
     }
 
 
-    pub fn update_game_status<'c: 'info, 'info>(
-        ctx: Context<'_, '_, 'c, 'info, UpdateGameStatus<'info>>,
+    pub fn update_game_status(
+        ctx: Context<UpdateGameStatus>,
         game_id: [u8; 16],
         session_id: [u8;21]
     ) -> Result<()> {
@@ -59,8 +59,8 @@ pub mod vortex_contracts {
     }
 
 
-    pub fn update_game_is_settled_status<'c: 'info, 'info>(
-        ctx: Context<'_, '_, 'c, 'info, UpdateGameSettleStatus<'info>>,
+    pub fn update_game_is_settled_status(
+        ctx: Context<UpdateGameSettleStatus>,
         game_id: [u8; 16],
         session_id: [u8;21]
     ) -> Result<()> {

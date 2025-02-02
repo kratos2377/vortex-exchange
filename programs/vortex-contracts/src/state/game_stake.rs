@@ -4,7 +4,7 @@ use borsh::{BorshDeserialize, BorshSerialize};
 
 
 #[account(zero_copy(unsafe))]
-#[derive(Default)]
+#[derive(Default , PartialEq)]
 #[repr(C)]
 pub struct VortexState {
     pub admin: Pubkey,
@@ -12,7 +12,7 @@ pub struct VortexState {
     pub signer_nonce: u8,
 }
 
-
+impl anchor_lang::AccountSerialize for VortexState {}
 impl VortexState {
     pub const SIZE: usize = 8 + 32 + 32 + 1 + 8;
 }
