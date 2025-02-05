@@ -354,7 +354,7 @@ pub fn handle_settle_all_bets_for_invalid_game<'c: 'info, 'info>(
     token::send_from_program_vault(
         &ctx.accounts.token_program,
         &ctx.accounts.game_vault,
-        &ctx.accounts.game_vault,
+        &ctx.accounts.to,
         &ctx.accounts.vortex_signer,
         vortex_state.signer_nonce,
         total_lamports_to_be_transferred,
@@ -397,7 +397,7 @@ pub fn handle_settle_all_bets_for_game<'c: 'info, 'info>(
     token::send_from_program_vault(
         &ctx.accounts.token_program,
         &ctx.accounts.game_vault,
-        &ctx.accounts.game_vault,
+        &ctx.accounts.to,
         &ctx.accounts.vortex_signer,
         vortex_state.signer_nonce,
         total_lamports_to_be_transferred,
@@ -451,12 +451,7 @@ pub struct InitGame<'info> {
         token::authority = vortex_signer
     )]
     pub game_vault: Box<InterfaceAccount<'info, TokenAccount>>,
-    #[account(
-        mut,
-        constraint = &game_vault.mint.eq(&user_token_account.mint),
-        token::authority = admin
-    )]
-    pub user_token_account: Box<InterfaceAccount<'info, TokenAccount>>,
+    pub user_token_account: AccountInfo<'info>,
     #[account(mut)]
     pub admin: Signer<'info>,
 
@@ -529,12 +524,7 @@ pub struct InitPlayerBet<'info> {
         bump,
     )]
     pub game_vault: Box<InterfaceAccount<'info, TokenAccount>>,
-    #[account(
-        mut,
-        constraint = &game_vault.mint.eq(&user_token_account.mint),
-        token::authority = admin
-    )]
-    pub user_token_account: Box<InterfaceAccount<'info, TokenAccount>>,
+    pub user_token_account: AccountInfo<'info>,
     #[account(mut)]
     pub admin: Signer<'info>,
     pub rent: Sysvar<'info, Rent>,
@@ -572,12 +562,7 @@ pub struct MakeUserGameBet<'info> {
         bump,
     )]
     pub game_vault: Box<InterfaceAccount<'info, TokenAccount>>,
-    #[account(
-        mut,
-        constraint = &game_vault.mint.eq(&user_token_account.mint),
-        token::authority = user_bet_wallet_key
-    )]
-    pub user_token_account: Box<InterfaceAccount<'info, TokenAccount>>,
+    pub user_token_account: AccountInfo<'info>,
     #[account(mut)]
     pub user_bet_wallet_key: Signer<'info>,
     pub rent: Sysvar<'info, Rent>,
@@ -614,12 +599,7 @@ pub struct UpdateUserGameBet<'info> {
         bump,
     )]
     pub game_vault: Box<InterfaceAccount<'info, TokenAccount>>,
-    #[account(
-        mut,
-        constraint = &game_vault.mint.eq(&user_token_account.mint),
-        token::authority = user_bet_wallet_key
-    )]
-    pub user_token_account: Box<InterfaceAccount<'info, TokenAccount>>,
+    pub user_token_account: AccountInfo<'info>,
     #[account(mut)]
     pub user_bet_wallet_key: Signer<'info>,
     pub system_program: Program<'info, System>,

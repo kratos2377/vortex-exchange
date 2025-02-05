@@ -23,7 +23,7 @@ pub fn get_signer_seeds(nonce: &u8) -> [&[u8]; 2] {
 pub fn send_from_program_vault<'info>(
     token_program: &Interface<'info, TokenInterface>,
     from: &InterfaceAccount<'info, TokenAccount>,
-    to: &InterfaceAccount<'info, TokenAccount>,
+    to: &AccountInfo<'info>,
     authority: &AccountInfo<'info>,
     nonce: u8,
     amount: u64,
@@ -63,7 +63,7 @@ pub fn send_from_program_vault<'info>(
 
 pub fn receive<'info>(
     token_program: &Interface<'info, TokenInterface>,
-    from: &InterfaceAccount<'info, TokenAccount>,
+    from: &AccountInfo<'info>,
     to: &InterfaceAccount<'info, TokenAccount>,
     authority: &AccountInfo<'info>,
     amount: u64,
