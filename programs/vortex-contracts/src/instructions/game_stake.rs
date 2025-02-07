@@ -41,14 +41,9 @@ pub fn handle_init_game<'c: 'info, 'info>(
     //     .cast()
     //     .or(Err(DexError::UnableToCastUnixTime))?;
 
-    let remaining_accounts_iter = &mut ctx.remaining_accounts.iter().peekable();
-    let mint = get_token_mint(remaining_accounts_iter)?;
+    // let remaining_accounts_iter = &mut ctx.remaining_accounts.iter().peekable();
+    // let mint = get_token_mint(remaining_accounts_iter)?;
 
-    let total_money_staked_u128 = 1 as u128;
-
-    let fee = total_money_staked_u128
-    .checked_mul(1 as u128).unwrap()
-    .checked_div(10000 as u128).unwrap(); 
 
     **game = Game {
         game_id: game_id,
@@ -59,18 +54,6 @@ pub fn handle_init_game<'c: 'info, 'info>(
         session_id: session_id,
         game_vault_key: *ctx.accounts.game_vault.to_account_info().key
        };
-
-    let total_lamports_to_be_transferred = (fee as u64 * LAMPORTS_PER_SOL) as u64;
-
-    token::receive(
-        &ctx.accounts.token_program,
-        &ctx.accounts.user_token_account,
-        &ctx.accounts.game_vault,
-        &ctx.accounts.admin,
-        total_lamports_to_be_transferred,
-        &mint,
-    );
-
 
     
     Ok(())
