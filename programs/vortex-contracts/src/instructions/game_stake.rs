@@ -239,7 +239,7 @@ pub fn handle_user_bet<'c: 'info, 'info>(
         &ctx.accounts.token_program,
         &ctx.accounts.user_token_account,
         &ctx.accounts.game_vault,
-        &ctx.accounts.user_bet_wallet_key,
+        &ctx.accounts.user_bet_wallet_key.to_account_info(),
         total_lamports_to_be_transferred,
         &mint,
     );
@@ -292,7 +292,7 @@ pub fn handle_update_bet<'c: 'info, 'info>(
         &ctx.accounts.token_program,
         &ctx.accounts.user_token_account,
         &ctx.accounts.game_vault,
-        &ctx.accounts.user_bet_wallet_key,
+        &ctx.accounts.user_bet_wallet_key.to_account_info(),
         total_lamports_to_be_transferred,
         &mint,
     );
@@ -338,7 +338,7 @@ pub fn handle_settle_all_bets_for_invalid_game<'c: 'info, 'info>(
         &ctx.accounts.token_program,
         &ctx.accounts.game_vault,
         &ctx.accounts.to,
-        &ctx.accounts.vortex_signer,
+        &ctx.accounts.vortex_signer.to_account_info(),
         vortex_state.signer_nonce,
         total_lamports_to_be_transferred,
         &mint,
@@ -381,7 +381,7 @@ pub fn handle_settle_all_bets_for_game<'c: 'info, 'info>(
         &ctx.accounts.token_program,
         &ctx.accounts.game_vault,
         &ctx.accounts.to,
-        &ctx.accounts.vortex_signer,
+        &ctx.accounts.vortex_signer.to_account_info(),
         vortex_state.signer_nonce,
         total_lamports_to_be_transferred,
         &mint,
@@ -427,15 +427,18 @@ pub struct InitGame<'info> {
     pub game_mint: Box<InterfaceAccount<'info, Mint>>,
     #[account(
         init,
-        seeds = [b"game_vault", game_id.as_ref() , session_id.as_ref()],
+        seeds = [b"game_vault".as_ref(), game_id.as_ref() , session_id.as_ref()],
         bump,
         payer = admin,
         token::mint = game_mint,
         token::authority = vortex_signer
     )]
     pub game_vault: Box<InterfaceAccount<'info, TokenAccount>>,
-    /// CHECK: program signer
-    pub user_token_account: AccountInfo<'info>,
+    #[account(
+        mut,
+        constraint = &game_vault.mint.eq(&user_token_account.mint)
+    )]
+    pub user_token_account: Box<InterfaceAccount<'info, TokenAccount>>,
     #[account(mut)]
     pub admin: Signer<'info>,
 
@@ -501,14 +504,18 @@ pub struct InitPlayerBet<'info> {
         bump,
     )]
     pub game: AccountLoader<'info, Game>,
+    pub game_mint: Box<InterfaceAccount<'info, Mint>>,
     #[account(
         mut,
-        seeds = [b"game_vault", game_id.as_ref() , session_id.as_ref()],
+        seeds = [b"game_vault".as_ref(), game_id.as_ref() , session_id.as_ref()],
         bump,
     )]
     pub game_vault: Box<InterfaceAccount<'info, TokenAccount>>,
-    /// CHECK: program signer
-    pub user_token_account: AccountInfo<'info>,
+    #[account(
+        mut,
+        constraint = &game_vault.mint.eq(&user_token_account.mint)
+    )]
+    pub user_token_account: Box<InterfaceAccount<'info, TokenAccount>>,
     #[account(mut)]
     pub admin: Signer<'info>,
     pub rent: Sysvar<'info, Rent>,
@@ -542,12 +549,15 @@ pub struct MakeUserGameBet<'info> {
     pub game: AccountLoader<'info, Game>,
     #[account(
         mut,
-        seeds = [b"game_vault", game_id.as_ref() , session_id.as_ref()],
+        seeds = [b"game_vault".as_ref(), game_id.as_ref() , session_id.as_ref()],
         bump,
     )]
     pub game_vault: Box<InterfaceAccount<'info, TokenAccount>>,
-    /// CHECK: program signer
-    pub user_token_account: AccountInfo<'info>,
+    #[account(
+        mut,
+        constraint = &game_vault.mint.eq(&user_token_account.mint)
+    )]
+    pub user_token_account: Box<InterfaceAccount<'info, TokenAccount>>,
     #[account(mut)]
     pub user_bet_wallet_key: Signer<'info>,
     pub rent: Sysvar<'info, Rent>,
@@ -580,12 +590,15 @@ pub struct UpdateUserGameBet<'info> {
     pub player_total_bet: AccountLoader<'info, PlayerTotalBet>, 
     #[account(
         mut,
-        seeds = [b"game_vault", game_id.as_ref() , session_id.as_ref()],
+        seeds = [b"game_vault".as_ref(), game_id.as_ref() , session_id.as_ref()],
         bump,
     )]
     pub game_vault: Box<InterfaceAccount<'info, TokenAccount>>,
-    /// CHECK: program signer
-    pub user_token_account: AccountInfo<'info>,
+    #[account(
+        mut,
+        constraint = &game_vault.mint.eq(&user_token_account.mint)
+    )]
+    pub user_token_account: Box<InterfaceAccount<'info, TokenAccount>>,
     #[account(mut)]
     pub user_bet_wallet_key: Signer<'info>,
     pub system_program: Program<'info, System>,
@@ -618,7 +631,7 @@ pub struct SettleAllBetsForInvalidGame<'info> {
     pub player_bet: AccountLoader<'info, PlayerTotalBet>,
     #[account(
         mut,
-        seeds = [b"game_vault", game_id.as_ref() , session_id.as_ref()],
+        seeds = [b"game_vault".as_ref(), game_id.as_ref() , session_id.as_ref()],
         bump,
         token::authority = vortex_signer
     )]
@@ -628,9 +641,10 @@ pub struct SettleAllBetsForInvalidGame<'info> {
         bump,
     )]
     pub vortex_state: AccountLoader<'info, VortexState>,
-    #[account(mut)]
-    /// CHECK: Account in which we will transfer the amount
-    pub to: AccountInfo<'info>,
+    #[account(mut,
+        constraint = &game_vault.mint.eq(&to.mint)
+    )]
+    pub to: Box<InterfaceAccount<'info, TokenAccount>>,
     #[account()]
     /// CHECK: program signer
     pub vortex_signer: AccountInfo<'info>,
@@ -663,7 +677,7 @@ pub struct SettleAllBetsForGame<'info> {
     pub player_bet: AccountLoader<'info, PlayerTotalBet>,
     #[account(
         mut,
-        seeds = [b"game_vault", game_id.as_ref() , session_id.as_ref()],
+        seeds = [b"game_vault".as_ref(), game_id.as_ref() , session_id.as_ref()],
         bump,
         token::authority = vortex_signer
     )]
@@ -673,9 +687,10 @@ pub struct SettleAllBetsForGame<'info> {
         bump,
     )]
     pub vortex_state: AccountLoader<'info, VortexState>,
-    #[account(mut)]
-    /// CHECK: Account in which we will transfer the amount
-    pub to: AccountInfo<'info>,
+    #[account(mut,
+        constraint = &game_vault.mint.eq(&to.mint)
+    )]
+    pub to: Box<InterfaceAccount<'info, TokenAccount>>,
     #[account()]
     /// CHECK: program signer
     pub vortex_signer: AccountInfo<'info>,
