@@ -9,7 +9,7 @@ use crate::{controllers, errors::DexError, load_mut, state::game_stake::{BetType
 pub fn handle_initialize(
     ctx: Context<Initialize>
 ) -> Result<()> {
-    validate!(ctx.accounts.admin.key == &crate::admin::id() , DexError::OnlyAdminCanChangeGameStates);
+    validate!(ctx.accounts.admin.key() == crate::admin::id() , DexError::OnlyAdminCanChangeGameStates);
     let (vortex_signer, vortex_signer_nonce) =
     Pubkey::find_program_address(&[b"vortex_signer".as_ref()], ctx.program_id);
 
@@ -451,6 +451,7 @@ pub struct InitGame<'info> {
         token::authority = vortex_signer
     )]
     pub game_vault: Box<InterfaceAccount<'info, TokenAccount>>,
+    /// CHECK: program signer
     pub user_token_account: AccountInfo<'info>,
     #[account(mut)]
     pub admin: Signer<'info>,
@@ -496,7 +497,6 @@ pub struct UpdateGameSettleStatus<'info> {
 #[derive(Accounts)]
 #[instruction(game_id: [u8;16], user_betting_on_id: [u8;16] , session_id: [u8;21])]
 pub struct InitPlayerBet<'info> {
-// in this case payer should be some global admin
     #[account(
         init,
         seeds = [b"player_bet", game_id.as_ref() , user_betting_on_id.as_ref() , session_id.as_ref()],
@@ -524,6 +524,7 @@ pub struct InitPlayerBet<'info> {
         bump,
     )]
     pub game_vault: Box<InterfaceAccount<'info, TokenAccount>>,
+    /// CHECK: program signer
     pub user_token_account: AccountInfo<'info>,
     #[account(mut)]
     pub admin: Signer<'info>,
@@ -562,6 +563,7 @@ pub struct MakeUserGameBet<'info> {
         bump,
     )]
     pub game_vault: Box<InterfaceAccount<'info, TokenAccount>>,
+    /// CHECK: program signer
     pub user_token_account: AccountInfo<'info>,
     #[account(mut)]
     pub user_bet_wallet_key: Signer<'info>,
@@ -599,6 +601,7 @@ pub struct UpdateUserGameBet<'info> {
         bump,
     )]
     pub game_vault: Box<InterfaceAccount<'info, TokenAccount>>,
+    /// CHECK: program signer
     pub user_token_account: AccountInfo<'info>,
     #[account(mut)]
     pub user_bet_wallet_key: Signer<'info>,
