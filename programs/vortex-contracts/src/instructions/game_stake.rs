@@ -381,7 +381,7 @@ pub fn handle_settle_all_bets_for_game<'c: 'info, 'info>(
         &ctx.accounts.token_program,
         &ctx.accounts.game_vault,
         &ctx.accounts.to,
-        &ctx.accounts.vortex_signer.to_account_info(),
+        &ctx.accounts.vortex_signer,
         vortex_state.signer_nonce,
         total_lamports_to_be_transferred,
         &mint,
@@ -683,9 +683,8 @@ pub struct SettleAllBetsForGame<'info> {
         constraint = &game_vault.mint.eq(&to.mint)
     )]
     pub to: Box<InterfaceAccount<'info, TokenAccount>>,
-    #[account()]
     /// CHECK: program signer
-    pub vortex_signer: Signer<'info>,
+    pub vortex_signer: AccountInfo<'info>,
     pub system_program: Program<'info, System>,
     pub token_program: Interface<'info, TokenInterface>,
 }
