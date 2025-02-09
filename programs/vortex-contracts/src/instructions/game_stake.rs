@@ -612,25 +612,21 @@ pub struct UpdateUserGameBet<'info> {
 pub struct SettleAllBetsForInvalidGame<'info> {
 
     #[account(
-        mut,
         seeds = [b"user_game_bet", game_id.as_ref(), user_betting_on_id.as_ref(), to.key().as_ref() , session_id.as_ref()],
         bump
     )]
     pub user_bet: AccountLoader<'info, UserGameBet>,
     #[account(
-        mut,
         seeds = [b"game", game_id.as_ref(), session_id.as_ref()],
         bump
     )]
     pub game: AccountLoader<'info, Game>,
     #[account(
-        mut,
         seeds = [b"player_bet", game_id.as_ref(), user_betting_on_id.as_ref(), session_id.as_ref()],
         bump
     )]
     pub player_bet: AccountLoader<'info, PlayerTotalBet>,
     #[account(
-        mut,
         seeds = [b"game_vault".as_ref(), game_id.as_ref() , session_id.as_ref()],
         bump,
         token::authority = vortex_signer
@@ -641,13 +637,13 @@ pub struct SettleAllBetsForInvalidGame<'info> {
         bump,
     )]
     pub vortex_state: AccountLoader<'info, VortexState>,
-    #[account(mut,
+    #[account(
         constraint = &game_vault.mint.eq(&to.mint)
     )]
     pub to: Box<InterfaceAccount<'info, TokenAccount>>,
     #[account()]
     /// CHECK: program signer
-    pub vortex_signer: AccountInfo<'info>,
+    pub vortex_signer: Signer<'info>,
     pub system_program: Program<'info, System>,
     pub token_program: Interface<'info, TokenInterface>,
 }
@@ -658,25 +654,21 @@ pub struct SettleAllBetsForInvalidGame<'info> {
 pub struct SettleAllBetsForGame<'info> {
 
     #[account(
-        mut,
         seeds = [b"user_game_bet", game_id.as_ref(), user_betting_on_id.as_ref(), to.key().as_ref() , session_id.as_ref()],
         bump
     )]
     pub user_bet: AccountLoader<'info, UserGameBet>,
     #[account(
-        mut,
         seeds = [b"game", game_id.as_ref(), session_id.as_ref()],
         bump
     )]
     pub game: AccountLoader<'info, Game>,
     #[account(
-        mut,
         seeds = [b"player_bet", game_id.as_ref(), user_betting_on_id.as_ref(), session_id.as_ref()],
         bump
     )]
     pub player_bet: AccountLoader<'info, PlayerTotalBet>,
     #[account(
-        mut,
         seeds = [b"game_vault".as_ref(), game_id.as_ref() , session_id.as_ref()],
         bump,
         token::authority = vortex_signer
@@ -687,13 +679,13 @@ pub struct SettleAllBetsForGame<'info> {
         bump,
     )]
     pub vortex_state: AccountLoader<'info, VortexState>,
-    #[account(mut,
+    #[account(
         constraint = &game_vault.mint.eq(&to.mint)
     )]
     pub to: Box<InterfaceAccount<'info, TokenAccount>>,
     #[account()]
     /// CHECK: program signer
-    pub vortex_signer: AccountInfo<'info>,
+    pub vortex_signer: Signer<'info>,
     pub system_program: Program<'info, System>,
     pub token_program: Interface<'info, TokenInterface>,
 }
