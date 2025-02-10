@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 use num_traits::ToBytes;
-use solana_program::native_token::LAMPORTS_PER_SOL;
+use solana_program::native_token::{sol_to_lamports, LAMPORTS_PER_SOL};
 use anchor_spl::token_interface::{Mint, TokenAccount, TokenInterface};
 use crate::{controllers, errors::DexError, load_mut, state::game_stake::{BetType, Game, PlayerTotalBet, UserGameBet}, utils::token::{self, get_token_mint}, validate, VortexState};
 
@@ -48,11 +48,11 @@ pub fn handle_init_game<'c: 'info, 'info>(
     **game = Game {
         game_id: game_id,
         pubkey: game_key,
-        total_pot: total_money_staked as f64,
+        total_pot: sol_to_lamports(total_money_staked),
         is_game_active: true,
         is_settled: false,
         session_id: session_id,
-        game_vault_key: *ctx.accounts.game_vault.to_account_info().key
+        game_vault_key: ctx.accounts.game_vault.key()
        };
 
     
@@ -112,15 +112,15 @@ pub fn handle_init_player_bet<'c: 'info, 'info>(
 
     require!(game.is_game_active == true , DexError::GameHasEnded);
 
-    
-    let total_money_staked_u128 = total_money_staked as u128;
+    // Will send standard X.XX decimal from frontend and convert it to 1e9 decimal places in actual function
+    let total_money_staked_lamports =  sol_to_lamports(total_money_staked) ;
 
-    let fee = total_money_staked_u128
-    .checked_mul(2 as u128).unwrap()
-    .checked_div(10000 as u128).unwrap();
+    let fee = total_money_staked_lamports
+    .checked_mul(2).unwrap()
+    .checked_div(10000).unwrap();
 
     
-    validate!(ctx.accounts.admin.lamports() > total_money_staked as u64 + fee as u64, DexError::NotEnoughBalance);
+    validate!(ctx.accounts.admin.lamports() > sol_to_lamports(total_money_staked)  + fee , DexError::NotEnoughBalance);
 
     let player_total_bet = &mut ctx.accounts.player_total_bet.load_init()?;
 
@@ -142,9 +142,9 @@ pub fn handle_init_player_bet<'c: 'info, 'info>(
     **player_total_bet = PlayerTotalBet {
         game_id: game_id,
         user_betting_on_id,
-        total_money_staked_on_player: total_money_staked as f64,
+        total_money_staked_on_player: total_money_staked_lamports ,
         session_id: session_id,
-        player_staked_money: total_money_staked,
+        player_staked_money: total_money_staked_lamports,
     };
 
     **user_game_bet = UserGameBet{
@@ -152,14 +152,13 @@ pub fn handle_init_player_bet<'c: 'info, 'info>(
         user_bet_wallet_key: admin_user_key,
         user_betting_on_id,
         bet_type: BetType::WIN,
-        money_staked: total_money_staked,
+        money_staked: total_money_staked_lamports,
         is_settled: false,
         session_id,
     };
-    game.total_pot += total_money_staked;
+    game.total_pot += total_money_staked_lamports;
     
-    let total_lamports_to_be_transferred = ( (fee as u64 + total_money_staked as u64) * LAMPORTS_PER_SOL) as u64;
-
+    let total_lamports_to_be_transferred = fee  + total_money_staked_lamports ;
 
     
     token::receive(
@@ -191,14 +190,14 @@ pub fn handle_user_bet<'c: 'info, 'info>(
     require!(game.is_game_active == true , DexError::GameHasEnded);
 
     
-    let total_money_staked_u128 = money_staked as u128;
+    let total_money_staked_lamports = sol_to_lamports(money_staked);
 
-    let fee = total_money_staked_u128
-    .checked_mul(1 as u128).unwrap()
-    .checked_div(10000 as u128).unwrap(); 
+    let fee = total_money_staked_lamports
+    .checked_mul(1).unwrap()
+    .checked_div(10000).unwrap(); 
 
 
-    validate!(ctx.accounts.user_bet_wallet_key.lamports() > money_staked as u64 + fee as u64 , DexError::NotEnoughBalance);
+    validate!(ctx.accounts.user_bet_wallet_key.lamports() > total_money_staked_lamports  + fee  , DexError::NotEnoughBalance);
 
     let remaining_accounts_iter = &mut ctx.remaining_accounts.iter().peekable();
     let mint = get_token_mint(remaining_accounts_iter)?;
@@ -215,14 +214,14 @@ pub fn handle_user_bet<'c: 'info, 'info>(
     //     .cast()
     //     .or(Err(DexError::UnableToCastUnixTime))?;
 
-    game.total_pot += money_staked;
-    player_bet.total_money_staked_on_player += money_staked;
+    game.total_pot += total_money_staked_lamports;
+    player_bet.total_money_staked_on_player += total_money_staked_lamports;
     **user_bet = UserGameBet {
         game_id,
         bet_type: BetType::WIN,
         user_bet_wallet_key: user_bet_wallet_key,
         user_betting_on_id,
-        money_staked,
+        money_staked: total_money_staked_lamports,
         is_settled: false,
         session_id: session_id
     };
@@ -232,7 +231,7 @@ pub fn handle_user_bet<'c: 'info, 'info>(
 
 
     
-    let total_lamports_to_be_transferred = ((fee as u64 + money_staked as u64) * LAMPORTS_PER_SOL) as u64;
+    let total_lamports_to_be_transferred = fee + total_money_staked_lamports ;
 
 
     token::receive(
@@ -263,14 +262,16 @@ pub fn handle_update_bet<'c: 'info, 'info>(
     require!(game.is_game_active == true , DexError::GameHasEnded);
 
     validate!(user_bet.user_betting_on_id == user_betting_on_id , DexError::UserHasDifferentBetType);
+
+    let total_money_staked_in_lamports = sol_to_lamports(money_staked);
     
-    validate!(ctx.accounts.user_bet_wallet_key.lamports() > money_staked.ceil() as u64 , DexError::NotEnoughBalance);
+    validate!(ctx.accounts.user_bet_wallet_key.lamports() >  total_money_staked_in_lamports, DexError::NotEnoughBalance);
 
     
-    let total_money_staked_u128 = money_staked as u128;
-    let fee = total_money_staked_u128
-    .checked_mul(1 as u128).unwrap()
-    .checked_div(10000 as u128).unwrap(); 
+  
+    let fee = total_money_staked_in_lamports
+    .checked_mul(1).unwrap()
+    .checked_div(10000).unwrap(); 
 
 
     validate!(ctx.accounts.user_bet_wallet_key.lamports() > money_staked as u64 + fee as u64 , DexError::NotEnoughBalance);
@@ -280,13 +281,13 @@ pub fn handle_update_bet<'c: 'info, 'info>(
 
 
 
-    let total_staked = user_bet.money_staked + money_staked;
-    player_total_bet.total_money_staked_on_player += money_staked;
-    game.total_pot += money_staked;
+    let total_staked = user_bet.money_staked + total_money_staked_in_lamports;
+    player_total_bet.total_money_staked_on_player += total_money_staked_in_lamports;
+    game.total_pot += total_money_staked_in_lamports;
     user_bet.money_staked = total_staked;
 
 
-    let total_lamports_to_be_transferred = ((fee as u64 + money_staked as u64) * LAMPORTS_PER_SOL) as u64;
+    let total_lamports_to_be_transferred = fee + total_money_staked_in_lamports;
 
     token::receive(
         &ctx.accounts.token_program,
@@ -331,7 +332,6 @@ pub fn handle_settle_all_bets_for_invalid_game<'c: 'info, 'info>(
         is_player
     );
 
-    let total_lamports_to_be_transferred = (money_to_be_rewarded_to_user as u64 * LAMPORTS_PER_SOL);
 
 
     token::send_from_program_vault(
@@ -340,7 +340,7 @@ pub fn handle_settle_all_bets_for_invalid_game<'c: 'info, 'info>(
         &ctx.accounts.to,
         &ctx.accounts.vortex_signer.to_account_info(),
         vortex_state.signer_nonce,
-        total_lamports_to_be_transferred,
+        money_to_be_rewarded_to_user,
         &mint,
     );
 
@@ -369,13 +369,14 @@ pub fn handle_settle_all_bets_for_game<'c: 'info, 'info>(
     let mint = get_token_mint(remaining_accounts_iter)?;
 
 
+    // this money that we get is in actual sol . this is not lamports we need to convert this to lamports to be transferred
     let money_to_be_rewarded_to_user = controllers::game_stake::calculate_winner_and_bettor_rewards(
         user_bet.money_staked,
         player_total_bet.total_money_staked_on_player,
         game.total_pot
     );
 
-    let total_lamports_to_be_transferred = (money_to_be_rewarded_to_user as u64 * LAMPORTS_PER_SOL);
+    let total_lamports_to_be_transferred = sol_to_lamports(money_to_be_rewarded_to_user);
 
     token::send_from_program_vault(
         &ctx.accounts.token_program,

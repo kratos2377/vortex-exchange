@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use borsh::{BorshDeserialize, BorshSerialize};
 
-
+// All these instruction should store staked amount in lamports 
 
 #[account(zero_copy(unsafe))]
 #[derive(Default , PartialEq)]
@@ -23,7 +23,7 @@ impl VortexState {
 pub struct Game {
     pub game_id: [u8;16],
     pub pubkey: Pubkey,
-    pub total_pot: f64,
+    pub total_pot: u64,
     pub is_game_active: bool,
     pub game_vault_key: Pubkey,
     pub is_settled: bool,
@@ -42,7 +42,7 @@ pub struct UserGameBet {
     pub user_bet_wallet_key: Pubkey,
     pub user_betting_on_id: [u8;16],
     pub bet_type: BetType,
-    pub money_staked: f64 ,
+    pub money_staked: u64 ,
     pub is_settled: bool,
     pub session_id: [u8;21],
 }
@@ -57,8 +57,8 @@ impl UserGameBet {
 pub struct PlayerTotalBet {
     pub game_id: [u8;16],
     pub user_betting_on_id: [u8;16],
-    pub player_staked_money: f64,
-    pub total_money_staked_on_player: f64,
+    pub player_staked_money: u64,
+    pub total_money_staked_on_player: u64,
     pub session_id: [u8;21],
 }
 
