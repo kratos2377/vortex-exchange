@@ -6,11 +6,11 @@ pub fn calculate_winner_and_bettor_rewards(
     total_money_staked_by_user: u64,
     total_money_staked_on_player: u64,
     total_pot: u64,
-) -> f64 {
+) -> u64 {
 
     let user_ratio_staked =( (total_money_staked_by_user as f64 ) / (total_money_staked_on_player as f64)) as f64;
 
-    user_ratio_staked * lamports_to_sol(total_pot)
+    (user_ratio_staked * total_pot as f64) as u64
 
 }
 

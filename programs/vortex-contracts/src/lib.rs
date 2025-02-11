@@ -41,7 +41,7 @@ pub mod vortex_contracts {
         ctx: Context<'_, '_, 'c, 'info, InitGame<'info>>,
         game_id: [u8; 16],
         session_id: [u8;21],
-        total_money_staked: f64,
+        total_money_staked: u64,
     ) -> Result<()> {
         handle_init_game(ctx, game_id,session_id, total_money_staked )
     }
@@ -71,7 +71,7 @@ pub mod vortex_contracts {
         game_id: [u8; 16],
         user_betting_on_id: [u8;16],
         session_id: [u8;21],
-        total_money_staked: f64
+        total_money_staked: u64
     
     ) -> Result<()> {
         handle_init_player_bet(ctx, game_id, user_betting_on_id, session_id, total_money_staked)
@@ -84,7 +84,7 @@ pub mod vortex_contracts {
         game_id: [u8; 16],
         user_betting_on_id: [u8;16],
         session_id: [u8;21],
-        money_staked: f64
+        money_staked: u64
     ) -> Result<()> {
         handle_user_bet(ctx, game_id, user_betting_on_id, session_id , money_staked )
     }
@@ -96,7 +96,7 @@ pub mod vortex_contracts {
         game_id: [u8;16],
         user_betting_on_id: [u8;16],
         session_id: [u8;21],
-        money_staked: f64
+        money_staked: u64
     
     ) -> Result<()> {
         handle_update_bet(ctx,   game_id, user_betting_on_id, session_id, money_staked)
