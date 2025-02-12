@@ -636,6 +636,7 @@ pub struct SettleAllBetsForInvalidGame<'info> {
     )]
     pub vortex_state: AccountLoader<'info, VortexState>,
     #[account(
+        mut,
         constraint = &game_vault.mint.eq(&to.mint)
     )]
     pub to: Box<InterfaceAccount<'info, TokenAccount>>,
@@ -683,6 +684,7 @@ pub struct SettleAllBetsForGame<'info> {
     )]
     pub vortex_state: AccountLoader<'info, VortexState>,
     #[account(
+        mut,
         constraint = &game_vault.mint.eq(&to.mint)
     )]
     pub to: Box<InterfaceAccount<'info, TokenAccount>>,
