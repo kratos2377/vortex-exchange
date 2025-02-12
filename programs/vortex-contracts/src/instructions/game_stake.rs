@@ -362,8 +362,6 @@ pub fn handle_settle_all_bets_for_game<'c: 'info, 'info>(
     let user_bet = load_mut!(ctx.accounts.user_bet)?;
     let player_total_bet = load_mut!(ctx.accounts.player_bet)?;
 
-    validate!(winner_id != user_bet.user_betting_on_id, DexError::UserLostTheBet);
-
     let vortex_state = &ctx.accounts.vortex_state.load()?;
     let remaining_accounts_iter = &mut ctx.remaining_accounts.iter().peekable();
     let mint = get_token_mint(remaining_accounts_iter)?;
@@ -613,7 +611,7 @@ pub struct SettleAllBetsForInvalidGame<'info> {
 
     #[account(
         mut,
-        seeds = [b"user_game_bet", game_id.as_ref(), user_betting_on_id.as_ref(), to.key().as_ref() , session_id.as_ref()],
+        seeds = [b"user_game_bet", game_id.as_ref(), user_betting_on_id.as_ref(), receiver_public_key.key.as_ref() , session_id.as_ref()],
         bump
     )]
     pub user_bet: AccountLoader<'info, UserGameBet>,
@@ -645,6 +643,8 @@ pub struct SettleAllBetsForInvalidGame<'info> {
         constraint = &game_vault.mint.eq(&to.mint)
     )]
     pub to: Box<InterfaceAccount<'info, TokenAccount>>,
+    /// CHECK: reciever info
+    pub receiver_public_key: AccountInfo<'info>,
     /// CHECK: program signer
     pub vortex_signer: AccountInfo<'info>,
     pub system_program: Program<'info, System>,
@@ -658,7 +658,7 @@ pub struct SettleAllBetsForGame<'info> {
 
     #[account(
         mut,
-        seeds = [b"user_game_bet", game_id.as_ref(), user_betting_on_id.as_ref(), to.key().as_ref() , session_id.as_ref()],
+        seeds = [b"user_game_bet", game_id.as_ref(), user_betting_on_id.as_ref(), receiver_public_key.key.as_ref() , session_id.as_ref()],
         bump
     )]
     pub user_bet: AccountLoader<'info, UserGameBet>,
@@ -690,6 +690,8 @@ pub struct SettleAllBetsForGame<'info> {
         constraint = &game_vault.mint.eq(&to.mint)
     )]
     pub to: Box<InterfaceAccount<'info, TokenAccount>>,
+    /// CHECK: reciever info
+    pub receiver_public_key: AccountInfo<'info>,
     /// CHECK: program signer
     pub vortex_signer: AccountInfo<'info>,
     pub system_program: Program<'info, System>,

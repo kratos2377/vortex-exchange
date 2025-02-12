@@ -13,7 +13,7 @@ use crate::state::game_stake::*;
 use crate::instructions::game_stake::*;
 
 
-declare_id!("6bFxEsbjpsMB4ZKLJYpgGyGeB3zzZdgn676HAmea9LDP");
+declare_id!("9yQsS3YXuNYSeHi6w6R5L6ABLaouQ6mjvUcPLBxdXYUj");
 
 
 pub mod admin {
