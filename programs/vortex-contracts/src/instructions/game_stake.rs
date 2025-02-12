@@ -62,17 +62,13 @@ pub fn handle_init_game<'c: 'info, 'info>(
 
 
 
-pub fn handle_update_game_status(
-    ctx: Context<UpdateGameStatus>,
+pub fn handle_update_game_status<'c: 'info, 'info>(
+    ctx: Context<'_ , '_ , 'c , 'info , UpdateGameStatus<'info>>,
     game_id: [u8; 16],
     session_id: [u8;21]
 ) -> Result<()> {
 
-
-
     let mut game = load_mut!(ctx.accounts.game)?;
-
-
 
     game.is_game_active = false;
 
@@ -81,8 +77,8 @@ pub fn handle_update_game_status(
 }
 
 
-pub fn handle_update_game_is_settled_status(
-    ctx: Context<UpdateGameSettleStatus>,
+pub fn handle_update_game_is_settled_status<'c: 'info, 'info>(
+    ctx: Context<'_ , '_ , 'c , 'info , UpdateGameSettleStatus<'info>>,
     game_id: [u8; 16],
     session_id: [u8;21]
 ) -> Result<()> {
@@ -459,8 +455,8 @@ pub struct UpdateGameStatus<'info> {
         bump,
     )]
     pub game: AccountLoader<'info, Game>,
-    #[account(mut)]
-    pub admin: Signer<'info>,
+    /// CHECK: program signer
+    pub vortex_signer: AccountInfo<'info>,
 }
 
 
@@ -474,8 +470,8 @@ pub struct UpdateGameSettleStatus<'info> {
         bump,
     )]
     pub game: AccountLoader<'info, Game>,
-    #[account(mut)]
-    pub admin: Signer<'info>,
+    /// CHECK: program signer
+    pub vortex_signer: AccountInfo<'info>,
 }
 
 #[derive(Accounts)]

@@ -47,25 +47,6 @@ pub mod vortex_contracts {
     }
 
 
-    pub fn update_game_status(
-        ctx: Context<UpdateGameStatus>,
-        game_id: [u8; 16],
-        session_id: [u8;21]
-    ) -> Result<()> {
-        handle_update_game_status(ctx, game_id , session_id)
-    }
-
-
-    pub fn update_game_is_settled_status(
-        ctx: Context<UpdateGameSettleStatus>,
-        game_id: [u8; 16],
-        session_id: [u8;21]
-    ) -> Result<()> {
-        handle_update_game_is_settled_status(ctx, game_id , session_id)
-    }
-
-
-
     pub fn initialize_player_bet<'c: 'info, 'info>(
         ctx: Context<'_, '_, 'c, 'info, InitPlayerBet<'info>>,
         game_id: [u8; 16],
@@ -106,6 +87,23 @@ pub mod vortex_contracts {
     
 
     //THis will be done by executors
+
+    pub fn update_game_status<'c: 'info, 'info>(
+        ctx: Context<'_ , '_ , 'c , 'info , UpdateGameStatus<'info>>,
+        game_id: [u8; 16],
+        session_id: [u8;21]
+    ) -> Result<()> {
+        handle_update_game_status(ctx, game_id , session_id)
+    }
+
+
+    pub fn update_game_is_settled_status<'c: 'info, 'info>(
+        ctx: Context<'_ , '_ , 'c , 'info , UpdateGameSettleStatus<'info>>,
+        game_id: [u8; 16],
+        session_id: [u8;21]
+    ) -> Result<()> {
+        handle_update_game_is_settled_status(ctx, game_id , session_id)
+    }
 
     //fn to settle bets if the game ended abruptly
     pub fn settle_all_bets_for_invalid_game<'c: 'info, 'info>(
