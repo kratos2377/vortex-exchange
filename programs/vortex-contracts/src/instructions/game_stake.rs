@@ -375,7 +375,7 @@ pub fn handle_settle_all_bets_for_game<'c: 'info, 'info>(
         &ctx.accounts.token_program,
         &ctx.accounts.game_vault,
         &ctx.accounts.to,
-        &ctx.accounts.authority,
+        &ctx.accounts.vortex_signer,
         vortex_state.signer_nonce,
         money_to_be_rewarded_to_user,
         &mint,
@@ -644,7 +644,6 @@ pub struct SettleAllBetsForInvalidGame<'info> {
     pub receiver_public_key: AccountInfo<'info>,
     /// CHECK: program signer
     pub vortex_signer: AccountInfo<'info>,
-    pub authority: Signer<'info>,
     pub system_program: Program<'info, System>,
     pub token_program: Interface<'info, TokenInterface>,
 }
@@ -692,7 +691,6 @@ pub struct SettleAllBetsForGame<'info> {
     pub receiver_public_key: AccountInfo<'info>,
     /// CHECK: program signer
     pub vortex_signer: AccountInfo<'info>,
-    pub authority: Signer<'info>,
     pub system_program: Program<'info, System>,
     pub token_program: Interface<'info, TokenInterface>,
 }
