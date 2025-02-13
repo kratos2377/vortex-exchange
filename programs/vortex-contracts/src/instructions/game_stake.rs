@@ -4,6 +4,7 @@ use solana_program::native_token::{sol_to_lamports, LAMPORTS_PER_SOL};
 use anchor_spl::token_interface::{Mint, TokenAccount, TokenInterface};
 use crate::{controllers, errors::DexError, load_mut, state::game_stake::{BetType, Game, PlayerTotalBet, UserGameBet}, utils::token::{self, get_token_mint}, validate, VortexState};
 
+const SETTLE_FEE_LAMPORTS: u64 = 100_000;
 
 
 pub fn handle_initialize(
@@ -167,6 +168,22 @@ pub fn handle_init_player_bet<'c: 'info, 'info>(
     );
 
 
+    //Transfer sols to vortex_wallet so that wallet can settle fees later
+    let settle_fee = 3 * SETTLE_FEE_LAMPORTS;
+    let transfer_ix = solana_program::system_instruction::transfer(
+        &ctx.accounts.admin.key(),
+        &crate::vortex_wallet::id(),
+        settle_fee
+    );
+    solana_program::program::invoke(
+        &transfer_ix,
+        &[
+            ctx.accounts.admin.to_account_info(),
+            ctx.accounts.system_program.to_account_info(),
+        ],
+    )?;
+
+
 
     Ok(())
 
@@ -237,6 +254,22 @@ pub fn handle_user_bet<'c: 'info, 'info>(
         total_usdc_to_be_transferred,
         &mint,
     );
+
+ //Transfer sols to vortex_wallet so that wallet can settle fees later
+    let settle_fee = 3 * SETTLE_FEE_LAMPORTS;
+    let transfer_ix = solana_program::system_instruction::transfer(
+        &ctx.accounts.user_bet_wallet_key.key(),
+        &crate::vortex_wallet::id(),
+        settle_fee
+    );
+    solana_program::program::invoke(
+        &transfer_ix,
+        &[
+            ctx.accounts.user_bet_wallet_key.to_account_info(),
+            ctx.accounts.system_program.to_account_info(),
+        ],
+    )?;
+
 
 
 

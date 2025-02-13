@@ -25,6 +25,14 @@ pub mod admin {
 }
 
 
+pub mod vortex_wallet {
+    use anchor_lang::prelude::declare_id;
+    #[cfg(feature = "devnet")]
+    declare_id!("4SeSw6t5H8xFn8rLXLyo2rVAJeDXBimU5Nybw2zm95LJ");
+    #[cfg(not(feature = "devnet"))]
+    declare_id!("4SeSw6t5H8xFn8rLXLyo2rVAJeDXBimU5Nybw2zm95LJ");
+}
+
 #[program]
 pub mod vortex_contracts {
 
