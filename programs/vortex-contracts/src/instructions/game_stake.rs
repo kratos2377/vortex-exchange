@@ -95,14 +95,10 @@ pub fn handle_init_player_bet<'c: 'info, 'info>(
     require!(game.can_stake , DexError::StakePeriodOver);
 
 
-    //0.002% fee this can be used to transfer amount during settling
-    let fee = total_money_staked
-    .checked_mul(2).unwrap()
-    .checked_div(10000).unwrap();
 
     // We will be using USDC Token hence better to send the token value with decimal for eg if we want to stake 1.32$
     //Send anchor.BN(1.32 * 1e6)
-    validate!(ctx.accounts.user_token_account.amount > total_money_staked  + fee , DexError::NotEnoughBalance);
+    validate!(ctx.accounts.user_token_account.amount > total_money_staked  , DexError::NotEnoughBalance);
 
     let player_total_bet = &mut ctx.accounts.player_total_bet.load_init()?;
 
@@ -140,15 +136,14 @@ pub fn handle_init_player_bet<'c: 'info, 'info>(
     };
     game.total_pot += total_money_staked;
     
-    let total_usdc_to_be_transferred = fee  + total_money_staked ;
 
     
-    token::receive(
+    let _ = token::receive(
         &ctx.accounts.token_program,
         &ctx.accounts.user_token_account,
         &ctx.accounts.game_vault,
         &ctx.accounts.admin,
-        total_usdc_to_be_transferred,
+        total_money_staked,
         &mint,
     );
 
@@ -164,6 +159,7 @@ pub fn handle_init_player_bet<'c: 'info, 'info>(
         &transfer_ix,
         &[
             ctx.accounts.admin.to_account_info(),
+            ctx.accounts.vortex_wallet.to_account_info(), // Add this line
             ctx.accounts.system_program.to_account_info(),
         ],
     )?;
@@ -189,12 +185,8 @@ pub fn handle_user_bet<'c: 'info, 'info>(
 
     
 
-    let fee = money_staked
-    .checked_mul(1).unwrap()
-    .checked_div(10000).unwrap(); 
 
-
-    validate!(ctx.accounts.user_token_account.amount > money_staked  + fee  , DexError::NotEnoughBalance);
+    validate!(ctx.accounts.user_token_account.amount > money_staked    , DexError::NotEnoughBalance);
 
     let remaining_accounts_iter = &mut ctx.remaining_accounts.iter().peekable();
     let mint = get_token_mint(remaining_accounts_iter)?;
@@ -224,19 +216,13 @@ pub fn handle_user_bet<'c: 'info, 'info>(
     };
 
 
-  
-
-
-    
-    let total_usdc_to_be_transferred = fee + money_staked ;
-
 
     token::receive(
         &ctx.accounts.token_program,
         &ctx.accounts.user_token_account,
         &ctx.accounts.game_vault,
         &ctx.accounts.user_bet_wallet_key.to_account_info(),
-        total_usdc_to_be_transferred,
+        money_staked,
         &mint,
     );
 
@@ -251,6 +237,7 @@ pub fn handle_user_bet<'c: 'info, 'info>(
         &transfer_ix,
         &[
             ctx.accounts.user_bet_wallet_key.to_account_info(),
+            ctx.accounts.vortex_wallet.to_account_info(), // Add this line
             ctx.accounts.system_program.to_account_info(),
         ],
     )?;
@@ -274,20 +261,9 @@ pub fn handle_update_bet<'c: 'info, 'info>(
 
     require!(game.can_stake, DexError::StakePeriodOver);
 
+    validate!(ctx.accounts.user_token_account.amount >  money_staked , DexError::NotEnoughBalance);
 
 
-    let fee = money_staked
-    .checked_mul(1).unwrap()
-    .checked_div(10000).unwrap(); 
-    
-    validate!(ctx.accounts.user_token_account.amount >  money_staked + fee, DexError::NotEnoughBalance);
-
-    
-  
- 
-
-
-    validate!(ctx.accounts.user_bet_wallet_key.lamports() > money_staked as u64 + fee as u64 , DexError::NotEnoughBalance);
 
     let remaining_accounts_iter = &mut ctx.remaining_accounts.iter().peekable();
     let mint = get_token_mint(remaining_accounts_iter)?;
@@ -300,14 +276,12 @@ pub fn handle_update_bet<'c: 'info, 'info>(
     user_bet.money_staked = total_staked;
 
 
-    let total_usdc_to_be_transferred = fee + money_staked;
-
     token::receive(
         &ctx.accounts.token_program,
         &ctx.accounts.user_token_account,
         &ctx.accounts.game_vault,
         &ctx.accounts.user_bet_wallet_key.to_account_info(),
-        total_usdc_to_be_transferred,
+        money_staked,
         &mint,
     );
 
@@ -517,6 +491,9 @@ pub struct InitPlayerBet<'info> {
     pub user_token_account: Box<InterfaceAccount<'info, TokenAccount>>,
     #[account(mut)]
     pub admin: Signer<'info>,
+    #[account(mut)]
+    /// CHECK: vortex wallet info
+    pub vortex_wallet: AccountInfo<'info>,
     pub rent: Sysvar<'info, Rent>,
     pub system_program: Program<'info, System>,
     pub token_program: Interface<'info, TokenInterface>,
@@ -559,6 +536,9 @@ pub struct MakeUserGameBet<'info> {
     pub user_token_account: Box<InterfaceAccount<'info, TokenAccount>>,
     #[account(mut)]
     pub user_bet_wallet_key: Signer<'info>,
+    #[account(mut)]
+    /// CHECK: vortex wallet info
+    pub vortex_wallet: AccountInfo<'info>,
     pub rent: Sysvar<'info, Rent>,
     pub system_program: Program<'info, System>,
     pub token_program: Interface<'info, TokenInterface>,
