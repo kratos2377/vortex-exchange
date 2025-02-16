@@ -50,8 +50,7 @@ pub fn handle_init_game<'c: 'info, 'info>(
         game_id: game_id,
         pubkey: game_key,
         total_pot: total_money_staked,
-        is_game_active: true,
-        is_settled: false,
+        can_stake: true,
         session_id: session_id,
         game_vault_key: ctx.accounts.game_vault.key()
        };
@@ -63,7 +62,7 @@ pub fn handle_init_game<'c: 'info, 'info>(
 
 
 
-pub fn handle_update_game_status<'c: 'info, 'info>(
+pub fn handle_update_game_stake_status<'c: 'info, 'info>(
     ctx: Context<'_ , '_ , 'c , 'info , UpdateGameStatus<'info>>,
     game_id: [u8; 16],
     session_id: [u8;21]
@@ -71,26 +70,12 @@ pub fn handle_update_game_status<'c: 'info, 'info>(
 
     let mut game = load_mut!(ctx.accounts.game)?;
 
-    game.is_game_active = false;
+    game.can_stake = false;
 
     Ok(())
 
 }
 
-
-pub fn handle_update_game_is_settled_status<'c: 'info, 'info>(
-    ctx: Context<'_ , '_ , 'c , 'info , UpdateGameSettleStatus<'info>>,
-    game_id: [u8; 16],
-    session_id: [u8;21]
-) -> Result<()> {
-
-    let mut game = load_mut!(ctx.accounts.game)?;
-
-    game.is_settled = true;
-
-    Ok(())
-
-}
 
 
 pub fn handle_init_player_bet<'c: 'info, 'info>(
@@ -107,7 +92,7 @@ pub fn handle_init_player_bet<'c: 'info, 'info>(
 
     let mut game = load_mut!(ctx.accounts.game)?;
 
-    require!(game.is_game_active == true , DexError::GameHasEnded);
+    require!(game.can_stake , DexError::StakePeriodOver);
 
 
     //0.002% fee this can be used to transfer amount during settling
@@ -200,7 +185,7 @@ pub fn handle_user_bet<'c: 'info, 'info>(
     let user_bet_wallet_key = ctx.accounts.user_bet_wallet_key.key();
     let mut game = load_mut!(ctx.accounts.game)?;
 
-    require!(game.is_game_active == true , DexError::GameHasEnded);
+    require!(game.can_stake  , DexError::StakePeriodOver);
 
     
 
@@ -287,9 +272,8 @@ pub fn handle_update_bet<'c: 'info, 'info>(
     let mut player_total_bet = load_mut!(ctx.accounts.player_total_bet)?;
     let mut game = load_mut!(ctx.accounts.game)?;
 
-    require!(game.is_game_active == true , DexError::GameHasEnded);
+    require!(game.can_stake, DexError::StakePeriodOver);
 
-    validate!(user_bet.user_betting_on_id == user_betting_on_id , DexError::UserHasDifferentBetType);
 
 
     let fee = money_staked
@@ -340,9 +324,6 @@ pub fn handle_settle_all_bets_for_invalid_game<'c: 'info, 'info>(
     is_player: bool
 ) -> Result<()> {
     let game = load_mut!(ctx.accounts.game)?;
-
-    require!(game.is_game_active != true , DexError::GameIsStillGoingOn);
-
     let user_bet = load_mut!(ctx.accounts.user_bet)?;
     let player_total_bet = load_mut!(ctx.accounts.player_bet)?;
 
@@ -386,7 +367,6 @@ pub fn handle_settle_all_bets_for_game<'c: 'info, 'info>(
 ) -> Result<()> {
     let game = load_mut!(ctx.accounts.game)?;
 
-    require!(game.is_game_active != true , DexError::GameIsStillGoingOn);
 
     let user_bet = load_mut!(ctx.accounts.user_bet)?;
     let player_total_bet = load_mut!(ctx.accounts.player_bet)?;
@@ -488,24 +468,16 @@ pub struct UpdateGameStatus<'info> {
         bump,
     )]
     pub game: AccountLoader<'info, Game>,
-    /// CHECK: program signer
-    pub vortex_signer: AccountInfo<'info>,
-}
-
-
-#[derive(Accounts)]
-#[instruction(game_id: [u8;16] , session_id: [u8;21])]
-pub struct UpdateGameSettleStatus<'info> {
-// in this case payer should be some global admin
     #[account(
         mut,
-        seeds = [b"game", game_id.as_ref() , session_id.as_ref()],
+        seeds = [b"game_vault".as_ref(), game_id.as_ref() , session_id.as_ref()],
         bump,
     )]
-    pub game: AccountLoader<'info, Game>,
+    pub game_vault: Box<InterfaceAccount<'info, TokenAccount>>,
     /// CHECK: program signer
     pub vortex_signer: AccountInfo<'info>,
 }
+
 
 #[derive(Accounts)]
 #[instruction(game_id: [u8;16], user_betting_on_id: [u8;16] , session_id: [u8;21])]

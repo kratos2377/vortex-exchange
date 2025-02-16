@@ -38,6 +38,9 @@ pub enum DexError {
     #[msg("Game has ended")]
     GameHasEnded,
 
+    #[msg("Stake Period Over")]
+    StakePeriodOver,
+
     #[msg("Only Admin can settle bets")]
     OnlyAdminCanSettleBets,
 
