@@ -322,7 +322,7 @@ pub fn handle_settle_all_bets_for_invalid_game<'c: 'info, 'info>(
         &ctx.accounts.token_program,
         &ctx.accounts.game_vault,
         &ctx.accounts.to,
-        &ctx.accounts.to.to_account_info(),
+        &ctx.accounts.vortex_signer,
         vortex_state.signer_nonce,
         money_to_be_rewarded_to_user,
         &mint,
